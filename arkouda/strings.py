@@ -792,6 +792,7 @@ class SArrays:
     very similar to Strings and the difference is that its content is 
     int arrays instead of strings.
 
+
     Attributes
     ----------
     offsets : pdarray
@@ -815,7 +816,9 @@ class SArrays:
     Notes
     -----
     SArrays is composed of two pdarrays: (1) offsets, which contains the
-    starting indices for each string's suffix array  and (2) bytes, which contains the 
+    starting indices for each string's suffix array  and
+    (2) bytes, which contains the 
+
     indices of all suffix arrays, no any spliter between two index arrays.    
     """
 
@@ -869,7 +872,6 @@ class SArrays:
             self.shape = self.offsets.shape
         except Exception as e:
             raise ValueError(e)   
-#        maybe we need to change the dtype into int later
         self.dtype = np.str
         self.logger = getArkoudaLogger(name=__class__.__name__)
 
