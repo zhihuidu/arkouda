@@ -12,7 +12,7 @@ from arkouda.dtypes import NUMBER_FORMAT_STRINGS, resolve_scalar_dtype, \
      translate_np_dtype
 import json
 
-__all__ = ['Graph','GraphD','GraphDW','GraphUD','GraphUDW']
+__all__ = ['GraphD','GraphDW','GraphUD','GraphUDW']
 
 class Vertex:
     """
@@ -275,9 +275,7 @@ class GraphDW(GraphD):
     start_i : pdarray
         The starting index of all the vertices in src 
     neighbour : pdarray
-        The number of current vertex id v's (v<n_vertices-1) neighbours and the value is
-        neighbour[v+1]-neighbour[v] if v<n_vertices-1 or 
-        n_edges-neighbour[v] if v=n_vertices-1
+        The number of current vertex id v's  neighbours
     v_weight : pdarray
         The weitht of every vertex in the graph
     e_weight : pdarray
@@ -364,9 +362,7 @@ class GraphUD(GraphD):
     start_i : pdarray
         The starting index of all the vertices in src 
     neighbour : pdarray
-        The number of current vertex id v's (v<n_vertices-1) neighbours and the value is
-        neighbour[v+1]-neighbour[v] if v<n_vertices-1 or 
-        n_edges-neighbour[v] if v=n_vertices-1
+        The number of current vertex id v's neighbours
     srcR : pdarray
         The source of every edge in the graph
     dstR : pdarray
@@ -458,9 +454,7 @@ class GraphUDW(GraphUD):
     start_i : pdarray
         The starting index of all the vertices in src 
     neighbour : pdarray
-        The number of current vertex id v's (v<n_vertices-1) neighbours and the value is
-        neighbour[v+1]-neighbour[v] if v<n_vertices-1 or 
-        n_edges-neighbour[v] if v=n_vertices-1
+        The number of current vertex id v's neighbours
     srcR : pdarray
         The source of every edge in the graph
     dstR : pdarray
@@ -549,9 +543,7 @@ class Graph:
     start_i : pdarray
         The starting index of all the vertices in src 
     neighbour : pdarray
-        The number of current vertex id v's (v<n_vertices-1) neighbours and the value is
-        neighbour[v+1]-neighbour[v] if v<n_vertices-1 or 
-        n_edges-neighbour[v] if v=n_vertices-1
+        The number of current vertex id v's neighbours 
     v_weight : pdarray
         The weitht of every vertex in the graph
     e_weight : pdarray
