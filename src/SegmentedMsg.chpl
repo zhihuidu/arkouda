@@ -1219,6 +1219,7 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
       if NumCol>2 {
            weighted=1;
       }
+      /*
       var src,srcR,src1,srcR1: [0..Ne-1] int;
       var dst,dstR,dst1,dstR1: [0..Ne-1] int;
       var e_weight: [0..Ne-1] int;
@@ -1227,6 +1228,26 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
       var neighbourR: [0..Nv-1] int;
       var start_i: [0..Nv-1] int;
       var start_iR: [0..Nv-1] int;
+      */
+      var src=makeDistArray(Ne,int);
+      var srcR=makeDistArray(Ne,int);
+      var src1=makeDistArray(Ne,int);
+      var srcR1=makeDistArray(Ne,int);
+   
+      var dst=makeDistArray(Ne,int);
+      var dstR=makeDistArray(Ne,int);
+      var dst1=makeDistArray(Ne,int);
+      var dstR1=makeDistArray(Ne,int);
+
+      var e_weight=makeDistArray(Nv,int);
+      var v_weight=makeDistArray(Nv,int);
+      var length=makeDistArray(Nv,int);
+      var lengthR=makeDistArray(Nv,int);
+      var neighbour=makeDistArray(Nv,int);
+      var neighbourR=makeDistArray(Nv,int);
+      var start_i=makeDistArray(Nv,int);
+      var start_iR=makeDistArray(Nv,int);
+
 
       var linenum=0:int;
 
@@ -1429,6 +1450,26 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
       var b = (1.0 - a)/ 3.0:real;
       var c = b;
       var d = b;
+      var src=makeDistArray(Ne,int);
+      var srcR=makeDistArray(Ne,int);
+      var src1=makeDistArray(Ne,int);
+      var srcR1=makeDistArray(Ne,int);
+
+      var dst=makeDistArray(Ne,int);
+      var dstR=makeDistArray(Ne,int);
+      var dst1=makeDistArray(Ne,int);
+      var dstR1=makeDistArray(Ne,int);
+
+      var e_weight=makeDistArray(Nv,int);
+      var v_weight=makeDistArray(Nv,int);
+      var length=makeDistArray(Nv,int);
+      var lengthR=makeDistArray(Nv,int);
+      var neighbour=makeDistArray(Nv,int);
+      var neighbourR=makeDistArray(Nv,int);
+      var start_i=makeDistArray(Nv,int);
+      var start_iR=makeDistArray(Nv,int);
+
+      /*
       var src,srcR,src1,srcR1: [0..Ne-1] int;
       var dst,dstR,dst1,dstR1: [0..Ne-1] int;
       var e_weight: [0..Ne-1] int;
@@ -1437,6 +1478,8 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
       var lengthR: [0..Nv-1] int;
       var start_i: [0..Nv-1] int;
       var start_iR: [0..Nv-1] int;
+      */
+
       length=0;
       lengthR=0;
       start_i=-1;
@@ -1507,8 +1550,8 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
  
       }
       //var neighbour  = (+ scan length) - length;
-      var neighbour  = length;
-      var neighbourR  = neighbour;
+      neighbour  = length;
+      neighbourR  = neighbour;
 
       if (directed==0) { //undirected graph
 
@@ -1689,45 +1732,74 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
 
       while (numCurF>0) {
            SetNextF.clear();
-           forall i in SetCurF {
-              var numNF=-1 :int;
-              ref nf=ag.neighbour.a;
-              ref sf=ag.start_i.a;
-              ref df=ag.dst.a;
-              numNF=nf[i];
-              ref NF=df[sf[i]..sf[i]+numNF-1];
-              if (numNF>0) {
-                forall j in NF {
-                //for j in NF {
-                   if (depth[j]==-1) {
-                      depth[j]=cur_level+1;
-                      SetNextF.add(j);
-                   }
-                }
-              }
+           //writeln("SetCurF=");
+           //writeln(SetCurF);
+           forall loc in Locales {
+                on loc {
+                  
+                    ref nf=ag.neighbour.a;
+                    ref sf=ag.start_i.a;
+                    ref df=ag.dst.a;
+                    ref srcf=ag.src.a;
+                    var ld=srcf.localSubdomain();
+                    //writeln("the local subdomain is");
+                    //writeln(ld);
+                    var myele:domain(int);
+                    for i in SetCurF {
+                       if ld.contains(i) {
+                          myele.add(i);
+                       }
+                    }
+                    //writeln("current locale=",loc, " has elements =", myele);
+                    forall i in myele {
+                        var numNF=-1 :int;
+                        numNF=nf[i];
+                        ref NF=df[sf[i]..sf[i]+numNF-1];
 
-           }//end forall i
+                        if (numNF>0) {
+                            for j in NF {
+                               //writeln("current node ",i, " has neibours ",NF);
+                               if (depth[j]==-1) {
+                                  depth[j]=cur_level+1;
+                                  SetNextF.add(j);
+                                  //writeln("current node ",i, " add ", j, 
+                                  //        " into level ", cur_level+1, " SetNextF=", SetNextF);
+                               }
+                            }
+                        } 
+
+                    }
+
+
+                }//end loc
+           }//end for loc
+
            cur_level+=1;
            //writeln("SetCurF= ", SetCurF, "SetNextF=", SetNextF, " level ", cur_level+1);
            numCurF=SetNextF.size;
            SetCurF=SetNextF;
-      }
+      }//end while
+      /*
       var vertexValue = radixSortLSD_ranks(depth);
       var levelValue=depth[vertexValue]; 
-      //var depthName =st.nextName();
+
       var levelName = st.nextName();
       var vertexName = st.nextName();
       var levelEntry = new shared SymEntry(levelValue);
       var vertexEntry = new shared SymEntry(vertexValue);
-      //var depthEntry = new shared SymEntry(depth);
       st.addEntry(levelName, levelEntry);
       st.addEntry(vertexName, vertexEntry);
-      //st.addEntry(depthName, depthEntry);
       repMsg =  'created ' + st.attrib(levelName) + '+created ' + st.attrib(vertexName) ;
-      //repMsg =  'created ' + st.attrib(depthName);
+      */
+
+      var depthName = st.nextName();
+      var depthEntry = new shared SymEntry(depth);
+      st.addEntry(depthName, depthEntry);
+      repMsg =  'created ' + st.attrib(depthName);
 
       smLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);      
       return repMsg;
+
   }
 
 
@@ -1754,32 +1826,54 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
 
       while (numCurF>0) {
            SetNextF.clear();
-           forall i in SetCurF {
-              var numNF=-1 :int;
-              ref nf=ag.neighbour.a;
-              ref sf=ag.start_i.a;
-              ref df=ag.dst.a;
-              numNF=nf[i];
-              ref NF=df[sf[i]..sf[i]+numNF-1];
-              writeln("current node ",i, " has ", numNF, " neighbours and  they are  ",NF);
-              if (numNF>0) {
-                forall j in NF {
-                //for j in NF {
-                   writeln("current node ",i, " check neibour ",j, " its depth=",depth[j]);
-                   if (depth[j]==-1) {
-                      depth[j]=cur_level+1;
-                      SetNextF.add(j);
-                      writeln("current node ",i, " add ", j, " into level ", cur_level+1, " SetNextF=", SetNextF);
-                   }
-                }
-              }
+           //writeln("SetCurF=");
+           //writeln(SetCurF);
+           forall loc in Locales {
+                on loc {
+                  
+                    ref nf=ag.neighbour.a;
+                    ref sf=ag.start_i.a;
+                    ref df=ag.dst.a;
+                    ref srcf=ag.src.a;
+                    var ld=srcf.localSubdomain();
+                    //writeln("the local subdomain is");
+                    //writeln(ld);
+                    var myele:domain(int);
+                    for i in SetCurF {
+                       if ld.contains(i) {
+                          myele.add(i);
+                       }
+                    }
+                    //writeln("current locale=",loc, " has elements =", myele);
+                    forall i in myele {
+                        var numNF=-1 :int;
+                        numNF=nf[i];
+                        ref NF=df[sf[i]..sf[i]+numNF-1];
 
-           }//end forall i
+                        if (numNF>0) {
+                            for j in NF {
+                               //writeln("current node ",i, " has neibours ",NF);
+                               if (depth[j]==-1) {
+                                  depth[j]=cur_level+1;
+                                  SetNextF.add(j);
+                                  //writeln("current node ",i, " add ", j, 
+                                  //        " into level ", cur_level+1, " SetNextF=", SetNextF);
+                               }
+                            }
+                        } 
+
+                    }
+
+
+                }//end loc
+           }//end for loc
+
            cur_level+=1;
-           writeln("SetCurF= ", SetCurF, "SetNextF=", SetNextF, " level ", cur_level+1);
+           //writeln("SetCurF= ", SetCurF, "SetNextF=", SetNextF, " level ", cur_level+1);
            numCurF=SetNextF.size;
            SetCurF=SetNextF;
-      }
+      }//end while
+      /*
       var vertexValue = radixSortLSD_ranks(depth);
       var levelValue=depth[vertexValue]; 
 
@@ -1790,14 +1884,18 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
       st.addEntry(levelName, levelEntry);
       st.addEntry(vertexName, vertexEntry);
       repMsg =  'created ' + st.attrib(levelName) + '+created ' + st.attrib(vertexName) ;
+      */
+
+      var depthName = st.nextName();
+      var depthEntry = new shared SymEntry(depth);
+      st.addEntry(depthName, depthEntry);
+      repMsg =  'created ' + st.attrib(depthName);
 
       smLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);      
       return repMsg;
+
+
   }
-
-
-
-
 
 
 
@@ -1825,7 +1923,7 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
       var SetNextF: domain(int);
       SetCurF.add(root);
       var numCurF=1:int;
-    
+      /*  
       writeln("========================BSF_UD==================================");
       writeln("Fisrt Check if the values are correct");
       writeln("src=");
@@ -1856,11 +1954,11 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
                 " start=",ag.start_iR.a[i], " they are ", 
                 ag.dstR.a[ag.start_iR.a[i]..ag.start_iR.a[i]-1+ag.neighbourR.a[i]]);
       }
-
+      */
       while (numCurF>0) {
            SetNextF.clear();
-           writeln("SetCurF=");
-           writeln(SetCurF);
+           //writeln("SetCurF=");
+           //writeln(SetCurF);
            forall loc in Locales {
                 on loc {
                   
@@ -1869,28 +1967,28 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
                     ref df=ag.dst.a;
                     ref srcf=ag.src.a;
                     var ld=srcf.localSubdomain();
-                    writeln("the local subdomain is");
-                    writeln(ld);
+                    //writeln("the local subdomain is");
+                    //writeln(ld);
                     var myele:domain(int);
                     for i in SetCurF {
                        if ld.contains(i) {
                           myele.add(i);
                        }
                     }
-                    writeln("current locale=",loc, " has elements =", myele);
+                    //writeln("current locale=",loc, " has elements =", myele);
                     forall i in myele {
                         var numNF=-1 :int;
                         numNF=nf[i];
                         ref NF=df[sf[i]..sf[i]+numNF-1];
 
                         if (numNF>0) {
-                            forall j in NF {
-                               writeln("current node ",i, " has neibours ",NF);
+                            for j in NF {
+                               //writeln("current node ",i, " has neibours ",NF);
                                if (depth[j]==-1) {
                                   depth[j]=cur_level+1;
                                   SetNextF.add(j);
-                                  writeln("current node ",i, " add ", j, 
-                                          " into level ", cur_level+1, " SetNextF=", SetNextF);
+                                  //writeln("current node ",i, " add ", j, 
+                                  //        " into level ", cur_level+1, " SetNextF=", SetNextF);
                                }
                             }
                         } 
@@ -1913,19 +2011,19 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
                                  }
                              }
 
-                             writeln("current locale=",loc, " has reverse elements =", myele);
+                             //writeln("current locale=",loc, " has reverse elements =", myele);
                              forall i in myeleR {
                                  var numNFR=-1 :int;
                                  numNFR=nfR[i];
                                  ref NFR=dfR[sfR[i]..sfR[i]+numNFR-1];
                                  if (numNFR>0) {
-                                    writeln("current node ",i, " has reverse neibours ",NFR);
-                                     forall j in NFR {
+                                     //writeln("current node ",i, " has reverse neibours ",NFR);
+                                     for j in NFR {
                                          if (depth[j]==-1) {
                                               depth[j]=cur_level+1;
                                               SetNextF.add(j);
-                                              writeln("current node ",i, " add reverse ", j, 
-                                                      " into level ", cur_level+1, " SetNextF=", SetNextF);
+                                              //writeln("current node ",i, " add reverse ", j, 
+                                              //        " into level ", cur_level+1, " SetNextF=", SetNextF);
                                          }
                                      } 
                                  }
@@ -1937,10 +2035,11 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
            }//end for loc
 
            cur_level+=1;
-           writeln("SetCurF= ", SetCurF, "SetNextF=", SetNextF, " level ", cur_level+1);
+           //writeln("SetCurF= ", SetCurF, "SetNextF=", SetNextF, " level ", cur_level+1);
            numCurF=SetNextF.size;
            SetCurF=SetNextF;
       }//end while
+      /*
       var vertexValue = radixSortLSD_ranks(depth);
       var levelValue=depth[vertexValue]; 
 
@@ -1951,6 +2050,12 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
       st.addEntry(levelName, levelEntry);
       st.addEntry(vertexName, vertexEntry);
       repMsg =  'created ' + st.attrib(levelName) + '+created ' + st.attrib(vertexName) ;
+      */
+
+      var depthName = st.nextName();
+      var depthEntry = new shared SymEntry(depth);
+      st.addEntry(depthName, depthEntry);
+      repMsg =  'created ' + st.attrib(depthName);
 
       smLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);      
       return repMsg;
@@ -2018,58 +2123,94 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
       }
       */
 
+
       while (numCurF>0) {
-           //writeln("start loop SetCurF=", SetCurF);
            SetNextF.clear();
-           forall i in SetCurF {
-              var numNF=-1 :int;
-              ref nf=ag.neighbour.a;
-              ref sf=ag.start_i.a;
-              ref df=ag.dst.a;
-              numNF=nf[i];
-              ref NF=df[sf[i]..sf[i]+numNF-1];
-              //writeln("current node ",i, " has ", numNF, " neighbours and  they are  ",NF);
-              if (numNF>0) {
-                forall j in NF {
-                //for j in NF {
-                   //writeln("current node ",i, " check neibour ",j, " its depth=",depth[j]);
-                   if (depth[j]==-1) {
-                      depth[j]=cur_level+1;
-                      SetNextF.add(j);
-                      //writeln("current node ",i, " add ", j, " into level ", cur_level+1, " SetNextF=", SetNextF);
-                   }
-                }
-              }
-              // reverse direction
-              if (Directed!=1) {
-                  var numNFR=-1 :int;
-                  ref nfR=ag.neighbourR.a;
-                  ref sfR=ag.start_iR.a;
-                  ref dfR=ag.dstR.a;
-                  numNFR=nfR[i];
-                  ref NFR=dfR[sfR[i]..sfR[i]+numNFR-1];
-                  //writeln("current node ",i, " has ", numNFR ," reverse neighbours and  they are  ",NFR);
-                  if ( numNFR>0) {
-                      forall j in NFR {
-                      //for j in NFR {
-                          //writeln("current node ",i, " check neibour ",j, " its depth=",depth[j]);
-                          if (depth[j]==-1) {
-                             depth[j]=cur_level+1;
-                             SetNextF.add(j);
-                             //writeln("current node ",i, " add reverse ", j, 
-                             //          " into level ", cur_level+1, " SetNextF=", SetNextF);
-                          }
-                      } 
-                  }
-              }
+           //writeln("SetCurF=");
+           //writeln(SetCurF);
+           forall loc in Locales {
+                on loc {
+                  
+                    ref nf=ag.neighbour.a;
+                    ref sf=ag.start_i.a;
+                    ref df=ag.dst.a;
+                    ref srcf=ag.src.a;
+                    var ld=srcf.localSubdomain();
+                    //writeln("the local subdomain is");
+                    //writeln(ld);
+                    var myele:domain(int);
+                    for i in SetCurF {
+                       if ld.contains(i) {
+                          myele.add(i);
+                       }
+                    }
+                    //writeln("current locale=",loc, " has elements =", myele);
+                    forall i in myele {
+                        var numNF=-1 :int;
+                        numNF=nf[i];
+                        ref NF=df[sf[i]..sf[i]+numNF-1];
 
+                        if (numNF>0) {
+                            for j in NF {
+                               //writeln("current node ",i, " has neibours ",NF);
+                               if (depth[j]==-1) {
+                                  depth[j]=cur_level+1;
+                                  SetNextF.add(j);
+                                  //writeln("current node ",i, " add ", j, 
+                                  //        " into level ", cur_level+1, " SetNextF=", SetNextF);
+                               }
+                            }
+                        } 
 
-           }//end forall i
+                    }
+
+                    // reverse direction
+                    if (Directed!=1) {
+
+                             ref nfR=ag.neighbourR.a;
+                             ref sfR=ag.start_iR.a;
+                             ref dfR=ag.dstR.a;
+                             ref srcfR=ag.srcR.a;
+
+                             var ldR=srcfR.localSubdomain();
+                             var myeleR:domain(int);
+                             for i in SetCurF {
+                                 if ldR.contains(i) {
+                                    myeleR.add(i);
+                                 }
+                             }
+
+                             //writeln("current locale=",loc, " has reverse elements =", myele);
+                             forall i in myeleR {
+                                 var numNFR=-1 :int;
+                                 numNFR=nfR[i];
+                                 ref NFR=dfR[sfR[i]..sfR[i]+numNFR-1];
+                                 if (numNFR>0) {
+                                     //writeln("current node ",i, " has reverse neibours ",NFR);
+                                     for j in NFR {
+                                         if (depth[j]==-1) {
+                                              depth[j]=cur_level+1;
+                                              SetNextF.add(j);
+                                              //writeln("current node ",i, " add reverse ", j, 
+                                              //        " into level ", cur_level+1, " SetNextF=", SetNextF);
+                                         }
+                                     } 
+                                 }
+                             }//forall end i in myeleR
+
+                    }//end reverse direction 
+
+                }//end loc
+           }//end for loc
+
            cur_level+=1;
            //writeln("SetCurF= ", SetCurF, "SetNextF=", SetNextF, " level ", cur_level+1);
            numCurF=SetNextF.size;
            SetCurF=SetNextF;
-      }
+      }//end while
+
+
+      /*
       var vertexValue = radixSortLSD_ranks(depth);
       var levelValue=depth[vertexValue]; 
 
@@ -2080,6 +2221,12 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
       st.addEntry(levelName, levelEntry);
       st.addEntry(vertexName, vertexEntry);
       repMsg =  'created ' + st.attrib(levelName) + '+created ' + st.attrib(vertexName) ;
+      */
+
+      var depthName = st.nextName();
+      var depthEntry = new shared SymEntry(depth);
+      st.addEntry(depthName, depthEntry);
+      repMsg =  'created ' + st.attrib(depthName);
 
       smLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);      
       return repMsg;
