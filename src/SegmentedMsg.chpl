@@ -1737,7 +1737,7 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
            SetNextF.clear();
            //writeln("SetCurF=");
            //writeln(SetCurF.these());
-           forall loc in Locales {
+           forall loc in Locales  with (ref SetNextF) {
                 on loc {
                   
                     ref nf=ag.neighbour.a;
@@ -1754,7 +1754,7 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
                        }
                     }
                     //writeln("current locale=",loc, " has elements =", myele);
-                    forall i in myele.these() {
+                    forall i in myele with (ref SetNextF) {
                         var numNF=-1 :int;
                         numNF=nf[i];
                         ref NF=df[sf[i]..sf[i]+numNF-1];
@@ -1835,7 +1835,7 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
            SetNextF.clear();
            //writeln("SetCurF=");
            //writeln(SetCurF.these());
-           forall loc in Locales {
+           forall loc in Locales  with (ref SetNextF) {
                 on loc {
                   
                     ref nf=ag.neighbour.a;
@@ -1852,7 +1852,7 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
                        }
                     }
                     //writeln("current locale=",loc, " has elements =", myele);
-                    forall i in myele.these() {
+                    forall i in myele with (ref SetNextF) {
                         var numNF=-1 :int;
                         numNF=nf[i];
                         ref NF=df[sf[i]..sf[i]+numNF-1];
@@ -1969,7 +1969,7 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
            SetNextF.clear();
            //writeln("SetCurF=");
            //writeln(SetCurF);
-           forall loc in Locales {
+           forall loc in Locales  with (ref SetNextF) {
                 on loc {
                   
                     ref nf=ag.neighbour.a;
@@ -1986,7 +1986,7 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
                        }
                     }
                     //writeln("current locale=",loc, " has elements =", myele);
-                    forall i in myele.these() {
+                    forall i in myele with (ref SetNextF) {
                         var numNF=-1 :int;
                         numNF=nf[i];
                         ref NF=df[sf[i]..sf[i]+numNF-1];
@@ -2023,7 +2023,7 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
                              }
 
                              //writeln("current locale=",loc, " has reverse elements =", myele);
-                             forall i in myeleR.these() {
+                             forall i in myeleR with (ref SetNextF){
                                  var numNFR=-1 :int;
                                  numNFR=nfR[i];
                                  ref NFR=dfR[sfR[i]..sfR[i]+numNFR-1];
@@ -2134,7 +2134,7 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
            SetNextF.clear();
            //writeln("SetCurF=");
            //writeln(SetCurF.these());
-           forall loc in Locales {
+           forall loc in Locales  with (ref SetNextF) {
                 on loc {
                   
                     ref nf=ag.neighbour.a;
@@ -2151,7 +2151,7 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
                        }
                     }
                     //writeln("current locale=",loc, " has elements =", myele);
-                    forall i in myele.these() {
+                    forall i in myele with (ref SetNextF){
                         var numNF=-1 :int;
                         numNF=nf[i];
                         ref NF=df[sf[i]..sf[i]+numNF-1];
@@ -2189,7 +2189,7 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
                              }
 
                              //writeln("current locale=",loc, " has reverse elements =", myele);
-                             forall i in myeleR.these() {
+                             forall i in myeleR with (ref SetNextF){
                                  var numNFR=-1 :int;
                                  numNFR=nfR[i];
                                  ref NFR=dfR[sfR[i]..sfR[i]+numNFR-1];

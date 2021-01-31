@@ -10,7 +10,7 @@ TYPES = ('int64', 'float64', 'bool', 'str')
 
 def time_ak_bfs_graph(trials:int):
     print("Graph BFS")
-    lgNv=8
+    lgNv=6
     Ne_per_v=2
     p=0.03
     directed=0
