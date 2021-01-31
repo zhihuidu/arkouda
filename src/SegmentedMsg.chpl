@@ -1675,60 +1675,9 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
       var srcN, dstN, startN, neighbourN, rootN :string;
 
       (srcN, dstN, startN, neighbourN,rootN )=restpart.splitMsgToTuple(5);
-      var ag = new owned SegGraphD(Nv,Ne,Directed,Weighted,srcN,dstN,
-                      startN,neighbourN,st);
-
 
       var root=rootN:int;
       var depth=-1: [0..Nv-1] int;
-      depth[root]=0;
-      var cur_level=0;
-      var SetCurF= new set(int,parSafe = true);
-      var SetNextF= new set(int,parSafe = true);
-      SetCurF.add(root);
-      var numCurF=1:int;
-
-      while (numCurF>0) {
-           SetNextF.clear();
-           forall i in SetCurF with (ref SetNextF) {
-              var numNF=-1 :int;
-              ref nf=ag.neighbour.a;
-              ref sf=ag.start_i.a;
-              ref df=ag.dst.a;
-              numNF=nf[i];
-              ref NF=df[sf[i]..sf[i]+numNF-1];
-              if (numNF>0) {
-                //forall j in NF {
-                for j in NF {
-                   if (depth[j]==-1) {
-                      depth[j]=cur_level+1;
-                      SetNextF.add(j);
-                   }
-                }
-              }
-
-           }//end forall i
-           cur_level+=1;
-           //writeln("SetCurF= ", SetCurF, "SetNextF=", SetNextF, " level ", cur_level+1);
-           numCurF=SetNextF.size;
-           SetCurF=SetNextF;
-      }
-
-      /*
-      var vertexValue = radixSortLSD_ranks(depth);
-      var levelValue=depth[vertexValue]; 
-      //var depthName =st.nextName();
-      var levelName = st.nextName();
-      var vertexName = st.nextName();
-      var levelEntry = new shared SymEntry(levelValue);
-      var vertexEntry = new shared SymEntry(vertexValue);
-      //var depthEntry = new shared SymEntry(depth);
-      st.addEntry(levelName, levelEntry);
-      st.addEntry(vertexName, vertexEntry);
-      //st.addEntry(depthName, depthEntry);
-      repMsg =  'created ' + st.attrib(levelName) + '+created ' + st.attrib(vertexName) ;
-      //repMsg =  'created ' + st.attrib(depthName);
-      */
 
       var depthName = st.nextName();
       var depthEntry = new shared SymEntry(depth);
@@ -1749,57 +1698,13 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
       (srcN, dstN, startN, neighbourN,vweightN,eweightN, rootN)=
                    restpart.splitMsgToTuple(7);
 
-      var ag = new owned SegGraphDW(Nv,Ne,Directed,Weighted,srcN,dstN,
-                      startN,neighbourN,vweightN,eweightN, st);
       var root=rootN:int;
       var depth=-1: [0..Nv-1] int;
       depth[root]=0;
       var cur_level=0;
-      var SetCurF= new set(int,parSafe = true);
-      var SetNextF= new set(int,parSafe = true);
-      SetCurF.add(root);
-      var numCurF=1:int;
 
-      while (numCurF>0) {
-           SetNextF.clear();
-           forall i in SetCurF with (ref SetNextF) {
-              var numNF=-1 :int;
-              ref nf=ag.neighbour.a;
-              ref sf=ag.start_i.a;
-              ref df=ag.dst.a;
-              numNF=nf[i];
-              ref NF=df[sf[i]..sf[i]+numNF-1];
-              //writeln("current node ",i, " has ", numNF, " neighbours and  they are  ",NF);
-              if (numNF>0) {
-                //forall j in NF {
-                for j in NF {
-                   //writeln("current node ",i, " check neibour ",j, " its depth=",depth[j]);
-                   if (depth[j]==-1) {
-                      depth[j]=cur_level+1;
-                      SetNextF.add(j);
-                      //writeln("current node ",i, " add ", j, " into level ", cur_level+1, " SetNextF=", SetNextF);
-                   }
-                }
-              }
 
-           }//end forall i
-           cur_level+=1;
-           //writeln("SetCurF= ", SetCurF, "SetNextF=", SetNextF, " level ", cur_level+1);
-           numCurF=SetNextF.size;
-           SetCurF=SetNextF;
-      }
-      /*
-      var vertexValue = radixSortLSD_ranks(depth);
-      var levelValue=depth[vertexValue]; 
 
-      var levelName = st.nextName();
-      var vertexName = st.nextName();
-      var levelEntry = new shared SymEntry(levelValue);
-      var vertexEntry = new shared SymEntry(vertexValue);
-      st.addEntry(levelName, levelEntry);
-      st.addEntry(vertexName, vertexEntry);
-      repMsg =  'created ' + st.attrib(levelName) + '+created ' + st.attrib(vertexName) ;
-      */
       var depthName = st.nextName();
       var depthEntry = new shared SymEntry(depth);
       st.addEntry(depthName, depthEntry);
@@ -1825,84 +1730,13 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
 
       (srcN, dstN, startN, neighbourN,srcRN, dstRN, startRN, neighbourRN, rootN )=
                    restpart.splitMsgToTuple(9);
-      var ag = new owned SegGraphUD(Nv,Ne,Directed,Weighted,
-                      srcN,dstN, startN,neighbourN,
-                      srcRN,dstRN, startRN,neighbourRN,
-                      st);
 
       var root=rootN:int;
       var depth=-1: [0..Nv-1] int;
-      depth[root]=0;
-      var cur_level=0;
-      var SetCurF= new set(int,parSafe = true);
-      var SetNextF= new set(int,parSafe = true);
-      SetCurF.add(root);
-      var numCurF=1:int;
-
-      //writeln("========================BSF_UD==================================");
-      while (numCurF>0) {
-           SetNextF.clear();
-           forall i in SetCurF with (ref SetNextF) {
-              var numNF=-1 :int;
-              ref nf=ag.neighbour.a;
-              ref sf=ag.start_i.a;
-              ref df=ag.dst.a;
-              numNF=nf[i];
-              ref NF=df[sf[i]..sf[i]+numNF-1];
-              if (numNF>0) {
-                //forall j in NF {
-                //writeln("current node ",i, " has neibours ",NF);
-                for j in NF {
-                   if (depth[j]==-1) {
-                      depth[j]=cur_level+1;
-                      SetNextF.add(j);
-                      //writeln("current node ",i, " add ", j, 
-                      //        " into level ", cur_level+1, " SetNextF=", SetNextF);
-                   }
-                }
-              }
-              // reverse direction
-              if (Directed!=1) {
-
-                  var numNFR=-1 :int;
-                  ref nfR=ag.neighbourR.a;
-                  ref sfR=ag.start_iR.a;
-                  ref dfR=ag.dstR.a;
-                  numNFR=nfR[i];
-                  ref NFR=dfR[sfR[i]..sfR[i]+numNFR-1];
-                  if (numNFR>0) {
-                      //writeln("current node ",i, " has reverse neibours ",NFR);
-                      //forall j in NFR {
-                      for j in NFR {
-                          if (depth[j]==-1) {
-                             depth[j]=cur_level+1;
-                             SetNextF.add(j);
-                             //writeln("current node ",i, " add reverse ", j, 
-                             //        " into level ", cur_level+1, " SetNextF=", SetNextF);
-                          }
-                      } 
-                  }
-              }
 
 
-           }//end forall i
-           cur_level+=1;
-           //writeln("SetCurF= ", SetCurF, "SetNextF=", SetNextF, " level ", cur_level+1);
-           numCurF=SetNextF.size;
-           SetCurF=SetNextF;
-      }
-      /*
-      var vertexValue = radixSortLSD_ranks(depth);
-      var levelValue=depth[vertexValue]; 
 
-      var levelName = st.nextName();
-      var vertexName = st.nextName();
-      var levelEntry = new shared SymEntry(levelValue);
-      var vertexEntry = new shared SymEntry(vertexValue);
-      st.addEntry(levelName, levelEntry);
-      st.addEntry(vertexName, vertexEntry);
 
-      */
       var depthName = st.nextName();
       var depthEntry = new shared SymEntry(depth);
       st.addEntry(depthName, depthEntry);
@@ -1927,117 +1761,10 @@ proc segmentedPeelMsg(cmd: string, payload: bytes, st: borrowed SymTab): string 
 
       (srcN, dstN, startN, neighbourN,srcRN, dstRN, startRN, neighbourRN,vweightN,eweightN, rootN )=
                    restpart.splitMsgToTuple(11);
-      var ag = new owned SegGraphUDW(Nv,Ne,Directed,Weighted,
-                      srcN,dstN, startN,neighbourN,
-                      srcRN,dstRN, startRN,neighbourRN,
-                      vweightN,eweightN, st);
 
-      //writeln("========================BSF_UDW==================================");
       var root=rootN:int;
       var depth=-1: [0..Nv-1] int;
-      depth[root]=0;
-      var cur_level=0;
-      var SetCurF= new set(int,parSafe = true);
-      var SetNextF= new set(int,parSafe = true);
-      SetCurF.add(root);
-      var numCurF=1:int;
 
-      /*
-      writeln("Fisrt Check if the values are correct");
-      writeln("src=");
-      writeln(ag.src.a);
-      writeln("dst=");
-      writeln(ag.dst.a);
-      writeln("neighbours=");
-      writeln(ag.neighbour.a);
-      writeln("start=");
-      writeln(ag.start_i.a);
-
-      writeln("srcR=");
-      writeln(ag.srcR.a);
-      writeln("dstR=");
-      writeln(ag.dstR.a);
-      writeln("neighbours=");
-      writeln(ag.neighbourR.a);
-      writeln("startR=");
-      writeln(ag.start_iR.a);
-
-      for i in 0..ag.n_vertices-1 do {
-          writeln("node ",i, " has ", ag.neighbour.a[i], " neighbours", 
-                " start=",ag.start_i.a[i], " they are ", 
-                ag.dst.a[ag.start_i.a[i]..ag.start_i.a[i]-1+ag.neighbour.a[i]]);
-      }
-      for i in 0..ag.n_vertices-1 do {
-          writeln("reverse node ",i, " has ", ag.neighbourR.a[i], " neighbours", 
-                " start=",ag.start_iR.a[i], " they are ", 
-                ag.dstR.a[ag.start_iR.a[i]..ag.start_iR.a[i]-1+ag.neighbourR.a[i]]);
-      }
-      */
-
-      while (numCurF>0) {
-           //writeln("start loop SetCurF=", SetCurF);
-           SetNextF.clear();
-           forall i in SetCurF with (ref SetNextF) {
-              var numNF=-1 :int;
-              ref nf=ag.neighbour.a;
-              ref sf=ag.start_i.a;
-              ref df=ag.dst.a;
-              numNF=nf[i];
-              ref NF=df[sf[i]..sf[i]+numNF-1];
-              //writeln("current node ",i, " has ", numNF, " neighbours and  they are  ",NF);
-              if (numNF>0) {
-                //forall j in NF {
-                for j in NF {
-                   //writeln("current node ",i, " check neibour ",j, " its depth=",depth[j]);
-                   if (depth[j]==-1) {
-                      depth[j]=cur_level+1;
-                      SetNextF.add(j);
-                      //writeln("current node ",i, " add ", j, " into level ", cur_level+1, " SetNextF=", SetNextF);
-                   }
-                }
-              }
-              // reverse direction
-              if (Directed!=1) {
-                  var numNFR=-1 :int;
-                  ref nfR=ag.neighbourR.a;
-                  ref sfR=ag.start_iR.a;
-                  ref dfR=ag.dstR.a;
-                  numNFR=nfR[i];
-                  ref NFR=dfR[sfR[i]..sfR[i]+numNFR-1];
-                  //writeln("current node ",i, " has ", numNFR ," reverse neighbours and  they are  ",NFR);
-                  if ( numNFR>0) {
-                      //forall j in NFR {
-                      for j in NFR {
-                          //writeln("current node ",i, " check neibour ",j, " its depth=",depth[j]);
-                          if (depth[j]==-1) {
-                             depth[j]=cur_level+1;
-                             SetNextF.add(j);
-                             //writeln("current node ",i, " add reverse ", j, 
-                             //          " into level ", cur_level+1, " SetNextF=", SetNextF);
-                          }
-                      } 
-                  }
-              }
-
-
-           }//end forall i
-           cur_level+=1;
-           //writeln("SetCurF= ", SetCurF, "SetNextF=", SetNextF, " level ", cur_level+1);
-           numCurF=SetNextF.size;
-           SetCurF=SetNextF;
-      }
-      /*
-      var vertexValue = radixSortLSD_ranks(depth);
-      var levelValue=depth[vertexValue]; 
-
-      var levelName = st.nextName();
-      var vertexName = st.nextName();
-      var levelEntry = new shared SymEntry(levelValue);
-      var vertexEntry = new shared SymEntry(vertexValue);
-      st.addEntry(levelName, levelEntry);
-      st.addEntry(vertexName, vertexEntry);
-      repMsg =  'created ' + st.attrib(levelName) + '+created ' + st.attrib(vertexName) ;
-      */
       var depthName = st.nextName();
       var depthEntry = new shared SymEntry(depth);
       st.addEntry(depthName, depthEntry);
