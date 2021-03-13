@@ -20,6 +20,7 @@ module SegmentedMsg {
   use DistributedBag;
   public use ArgSortMsg;
   use Time;
+  use CommAggregation;
 
   private config const DEBUG = false;
   const smLogger = new Logger();
@@ -410,7 +411,8 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
               // TO DO: in the future, we will force the client to handle this
               idx = convertPythonIndexToChapel(idx, arrays.size);
               var s = arrays[idx];
-              return "item %s %jt".format("int", s);
+              var repMsg= "item %s %jt".format("int", s);
+              return new MsgTuple(repMsg, MsgType.NORMAL);
           }
           otherwise { 
               var errorMsg = notImplementedError(pn, objtype); 
@@ -481,7 +483,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
             if (stride != 1) { 
                 var errorMsg = notImplementedError(pn, "stride != 1"); 
                 smLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);      
-                return errorMsg;
+                return new MsgTuple(errorMsg, MsgType.ERROR);
             }
             // TO DO: in the future, we will force the client to handle this
             var slice: range(stridable=true) = convertPythonSliceToChapel(start, stop, stride);
@@ -595,13 +597,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                         var errorMsg = "("+objtype+","+dtype2str(gIV.dtype)+")";
                         smLogger.error(getModuleName(),getRoutineName(),
                                                       getLineNumber(),errorMsg); 
-                        return notImplementedError(pn,errorMsg);
+                        return new MsgTuple(errorMsg, MsgType.ERROR);
                     }
                 }
             } catch e: Error {
                 smLogger.error(getModuleName(),getRoutineName(),getLineNumber(),
                       e.message());
-                return "Error: %t".format(e.message());
+                var errorMsg="Error: %t".format(e.message());
+                return new MsgTuple(errorMsg, MsgType.ERROR);
             }
         }
         otherwise {
@@ -813,11 +816,12 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       return new MsgTuple(repMsg, MsgType.NORMAL);
   }
 
-  proc segIn1dIntMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+  //proc segIn1dIntMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+  proc segIn1dIntMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
     var pn = Reflection.getRoutineName();
     var repMsg: string;
     var (mainObjtype, mainSegName, mainValName, testObjtype, testSegName,
-         testValName, invertStr) = payload.decode().splitMsgToTuple(7);
+         testValName, invertStr) = payload.splitMsgToTuple(7);
 
     // check to make sure symbols defined
     st.check(mainSegName);
@@ -828,7 +832,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
     var invert: bool;
     if invertStr == "True" {invert = true;}
     else if invertStr == "False" {invert = false;}
-    else {return "Error: Invalid argument in %s: %s (expected True or False)".format(pn, invertStr);}
+    else {
+         var errorMsg= "Error: Invalid argument in %s: %s (expected True or False)".format(pn, invertStr);
+         return new MsgTuple(errorMsg, MsgType.ERROR);            
+    }
     
     var rname = st.nextName();
     select (mainObjtype, testObjtype) {
@@ -845,7 +852,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
     otherwise {
         var errorMsg = unrecognizedTypeError(pn, "("+mainObjtype+", "+testObjtype+")");
         smLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);      
-        return errorMsg;            
+        return new MsgTuple(errorMsg, MsgType.ERROR);            
       }
     }
     repMsg= "created " + st.attrib(rname);
@@ -872,7 +879,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
               smLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);      
               return new MsgTuple(errorMsg, MsgType.ERROR);            
           }
-      }
+   }
 
       var repMsg =  "created " + st.attrib(rname);
       smLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
@@ -881,9 +888,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
 
 
-  proc segSuffixArrayMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+  //proc segSuffixArrayMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+  proc segSuffixArrayMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       var pn = Reflection.getRoutineName();
-      var (objtype, segName, valName) = payload.decode().splitMsgToTuple(3);
+      var (objtype, segName, valName) = payload.splitMsgToTuple(3);
       var repMsg: string;
 
       // check to make sure symbols defined
@@ -1005,9 +1013,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
   }
 
-  proc segLCPMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+  //proc segLCPMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+  proc segLCPMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       var pn = Reflection.getRoutineName();
-      var (objtype, segName1, valName1,segName2,valName2) = payload.decode().splitMsgToTuple(5);
+      var (objtype, segName1, valName1,segName2,valName2) = payload.splitMsgToTuple(5);
       var repMsg: string;
 
       // check to make sure symbols defined
@@ -1101,10 +1110,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
   }
 
 // directly read a string from given file and generate its suffix array
-  proc segSAFileMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+  //proc segSAFileMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+  proc segSAFileMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       var pn = Reflection.getRoutineName();
 //      var (FileName) = payload.decode().splitMsgToTuple(1);
-      var FileName = payload.decode();
+      var FileName = payload;
       var repMsg: string;
 
 //      var filesize:int(32);
@@ -1213,9 +1223,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
 
 // directly read a graph from given file and build the SegGraph class in memory
-  proc segGraphFileMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+  //proc segGraphFileMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+  proc segGraphFileMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       //var pn = Reflection.getRoutineName();
-      var (NeS,NvS,ColS,DirectedS, FileName) = payload.decode().splitMsgToTuple(5);
+      var (NeS,NvS,ColS,DirectedS, FileName) = payload.splitMsgToTuple(5);
       //writeln("======================Graph Reading=====================");
       //writeln(NeS,NvS,ColS,DirectedS, FileName);
       var Ne=NeS:int;
@@ -1428,7 +1439,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                     //overMemLimit(((4 + 3) * size * (numDigits * bitsPerDigit / 8))
                     //             + (2 * here.maxTaskPar * numLocales * 2**16 * 8));
                     var merged = makeDistArray(size, numDigits*uint(bitsPerDigit));
-                    var curDigit = RSLSD_tupleLow + numDigits - totalDigits;
+                    var curDigit = numDigits - totalDigits;
                     for (ary , nBits, neg) in zip([src,dst], bitWidths, negs) {
                         proc mergeArray(type t) {
                             ref A = ary;
@@ -1545,7 +1556,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                //overMemLimit(((4 + 3) * size * (numDigits * bitsPerDigit / 8))
                //          + (2 * here.maxTaskPar * numLocales * 2**16 * 8));
                var merged = makeDistArray(size, numDigits*uint(bitsPerDigit));
-               var curDigit = RSLSD_tupleLow + numDigits - totalDigits;
+               var curDigit = numDigits - totalDigits;
                for (ary , nBits, neg) in zip([srcR,dstR], bitWidths, negs) {
                   proc mergeArray(type t) {
                      ref A = ary;
@@ -1699,10 +1710,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
 
 
-  proc segrmatgenMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+  //proc segrmatgenMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+  proc segrmatgenMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       var repMsg: string;
       var (slgNv, sNe_per_v, sp, sdire,swei,rest )
-          = payload.decode().splitMsgToTuple(6);
+          = payload.splitMsgToTuple(6);
       //writeln(slgNv, sNe_per_v, sp, sdire,swei,rest);
       var lgNv = slgNv: int;
       var Ne_per_v = sNe_per_v: int;
@@ -1839,7 +1851,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                     //overMemLimit(((4 + 3) * size * (numDigits * bitsPerDigit / 8))
                     //             + (2 * here.maxTaskPar * numLocales * 2**16 * 8));
                     var merged = makeDistArray(size, numDigits*uint(bitsPerDigit));
-                    var curDigit = RSLSD_tupleLow + numDigits - totalDigits;
+                    var curDigit = numDigits - totalDigits;
                     for (ary , nBits, neg) in zip([src,dst], bitWidths, negs) {
                         proc mergeArray(type t) {
                             ref A = ary;
@@ -2061,7 +2073,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                //overMemLimit(((4 + 3) * size * (numDigits * bitsPerDigit / 8))
                //          + (2 * here.maxTaskPar * numLocales * 2**16 * 8));
                var merged = makeDistArray(size, numDigits*uint(bitsPerDigit));
-               var curDigit = RSLSD_tupleLow + numDigits - totalDigits;
+               var curDigit = numDigits - totalDigits;
                for (ary , nBits, neg) in zip([srcR,dstR], bitWidths, negs) {
                   proc mergeArray(type t) {
                      ref A = ary;
@@ -2271,12 +2283,13 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
   }
 
 
-  proc segBFSMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+  //proc segBFSMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+  proc segBFSMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       var repMsg: string;
       //var (n_verticesN,n_edgesN,directedN,weightedN,srcN, dstN, startN, neighbourN,vweightN,eweightN, rootN )
       //    = payload.decode().splitMsgToTuple(10);
       var (n_verticesN,n_edgesN,directedN,weightedN,restpart )
-          = payload.decode().splitMsgToTuple(5);
+          = payload.splitMsgToTuple(5);
       var Nv=n_verticesN:int;
       var Ne=n_edgesN:int;
       var Directed=directedN:int;
@@ -2324,49 +2337,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        //writeln("the local subdomain is");
                        //writeln(ld);
                        //var myele:domain(int);
-                       var myele = new set(int,parSafe = true);
-                       for i in SetCurF{
-                           //writeln("src domain=",ld );
-                           proc binary_Search(ary:[?D1] int,e:int):bool {
-                                if (e<ary[D1.low] || e> ary[D1.high] ){ 
-                                      return(false);
-                                } else {
-                                   if (e==ary[D1.low] || e== ary[D1.high] ){ 
-                                      return(true);
-                                   } else {  
-                                       var mid=(D1.low+D1.high)/2:int;
-                                       if (ary[mid]==e) {
-                                           return (true);
-                                       } else {
-                                          if (ary[mid]<e ) {
-                                             if ( mid< D1.high) {
-                                                 return binary_Search(ary[mid+1..D1.high],e);
-                                             } else  {
-                                                return false;
-                                             }
-                                          }
-                                          else {
-                                             if ( mid> D1.low) {
-                                                 return binary_Search(ary[D1.low..mid-1],e);
-                                             } else {
-                                                  return false;
-                                             }
-                                          }
-                                       }
-                                   }
-                                }
-                           }
-                           if ( binary_Search(src(ld),i) ) {
-                               myele.add(i);// add the vertex in current frontier and on my locales into myele
-                           }
-                       }
-                       //for i in SetCurF{
-                       //    if ld.contains(i) {
-                       //        myele.add(i);// add the vertex in current frontier and on my locales into myele
-                       //    }
-                       //}
-                       //writeln("current locale=",loc, " has elements =", myele);
-                       forall i in myele with (ref SetNextF) {
+                       coforall i in SetCurF with (ref SetNextF) {
                               var numNF=-1 :int;
                               numNF=nf[i];
                               ref NF=df[sf[i]..sf[i]+numNF-1];
@@ -2383,15 +2354,15 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                    }//end on loc
                 }//end forall loc
                 cur_level+=1;
-                numCurF=SetNextF.getSize();
-                //numCurF=SetNextF.size;
+                //numCurF=SetNextF.getSize();
+                numCurF=SetNextF.size;
                 //writeln("SetCurF= ", SetCurF, " SetNextF=", SetNextF, " level ", cur_level+1," numCurf=", numCurF);
-                //numCurF=SetNextF.size;
-                SetCurF.clear();
-                SetCurF<=>SetNextF;
+                numCurF=SetNextF.size;
+                //SetCurF.clear();
+                //SetCurF<=>SetNextF;
                 //SetNextF.clear();
-                //SetCurF=SetNextF;
-                //SetNextF.clear();
+                SetCurF=SetNextF;
+                SetNextF.clear();
           }//end while  
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
@@ -2408,10 +2379,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           var cur_level=0;
           //var SetCurF: domain(int);//use domain to keep the current frontier
           //var SetNextF:domain(int);//use domain to keep the next frontier
-          var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
-          var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
-          //var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
-          //var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
+          //var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
+          //var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
+          var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
+          var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
           SetCurF.add(root);
           var numCurF=1:int;
 
@@ -2437,45 +2408,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        //writeln(ld);
                        //var myele:domain(int);
 
-                       var myele = new set(int,parSafe = true);
-                       for i in SetCurF{
-                           //writeln("src domain=",ld, " srcR domian=",ldR);
-                           proc binary_Search(ary:[?D1] int,e:int):bool {
-                                if (e<ary[D1.low] || e> ary[D1.high] ){ 
-                                      return(false);
-                                } else {
-                                   if (e==ary[D1.low] || e== ary[D1.high] ){ 
-                                      return(true);
-                                   } else {  
-                                       var mid=(D1.low+D1.high)/2:int;
-                                       if (ary[mid]==e) {
-                                           return (true);
-                                       } else {
-                                          if (ary[mid]<e ) {
-                                             if ( mid< D1.high) {
-                                                 return binary_Search(ary[mid+1..D1.high],e);
-                                             } else  {
-                                                return false;
-                                             }
-                                          }
-                                          else {
-                                             if ( mid> D1.low) {
-                                                 return binary_Search(ary[D1.low..mid-1],e);
-                                             } else {
-                                                  return false;
-                                             }
-                                          }
-                                       }
-                                   }
-                                }
-                           }
-                           if ( binary_Search(src(ld),i) || binary_Search(srcR(ldR),i) ) {
-                               myele.add(i);// add the vertex in current frontier and on my locales into myele
-                           }
-                       }
-
-                       //writeln("current locale=",loc, " has elements =", myele);
-                       forall i in myele with (ref SetNextF) {
+                       coforall i in SetCurF with (ref SetNextF) {
                        //forall i in SetCurF with (ref SetNextF){
                               var numNF=-1 :int;
                               numNF=nf[i];
@@ -2507,14 +2440,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                    }//end on loc
                 }//end coforall loc
                 cur_level+=1;
-                numCurF=SetNextF.getSize();
-                //numCurF=SetNextF.size;
+                //numCurF=SetNextF.getSize();
+                numCurF=SetNextF.size;
                 //writeln("SetCurF= ", SetCurF, " SetNextF=", SetNextF, " level ", cur_level+1," numCurf=", numCurF);
                 //numCurF=SetNextF.size;
-                //SetCurF=SetNextF;
-                SetCurF.clear();
-                SetCurF<=>SetNextF;
-                //SetNextF.clear();
+                SetCurF=SetNextF;
+                //SetCurF.clear();
+                //SetCurF<=>SetNextF;
+                SetNextF.clear();
           }//end while  
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
@@ -2596,6 +2529,388 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       return new MsgTuple(repMsg, MsgType.NORMAL);
 
   }
+
+
+  proc segTriMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+      var repMsg: string;
+      var (n_verticesN,n_edgesN,directedN,weightedN,restpart )
+          = payload.splitMsgToTuple(5);
+      var Nv=n_verticesN:int;
+      var Ne=n_edgesN:int;
+      var Directed=directedN:int;
+      var Weighted=weightedN:int;
+      var countName:string;
+      var timer:Timer;
+      timer.start();
+
+      var TotalCnt=0:[0..1] int;
+      var subTriSum=0: [0..numLocales-1] int;
+
+      var srcN, dstN, startN, neighbourN,vweightN,eweightN, rootN :string;
+      var srcRN, dstRN, startRN, neighbourRN:string;
+
+      proc tri_kernel(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int):string throws{
+            /*
+            coforall loc in Locales  {
+                   on loc {
+                       var triCount=0:int;
+
+                       ref srcf=src;
+                       ref df=dst;
+                       ref sf=start_i;
+                       ref nf=nei;
+                       var ld=srcf.localSubdomain();
+
+                       var startVer=srcf[ld.low];
+                       var endVer=srcf[ld.high];
+
+                       var startEdge=ld.low;
+                       var endEdge=ld.high;
+
+                       var lastVer=-1;
+
+                       var aggsrc= newSrcAggregator(int);
+
+                       if (startVer>0 && startEdge>0)  {//skip the first node if its  edges cover two locales
+                            aggsrc.copy(lastVer,srcf[startEdge-1]);
+                            aggsrc.flush();
+                            while (lastVer==startVer) {
+                                startEdge+=1;
+                                aggsrc.copy(startVer,srcf[startEdge]);
+                            } 
+                       }
+
+                       // the size can be larger than the number of all u
+                       var uary:[0..srcf[endEdge]-srcf[startEdge]] int;
+                       var uindex:int;
+                       unidex=0;
+                       uary[0]=srcf[0];
+                       for i in startEdge+1..endEdge  {// build all nodes belong to the current locale
+                             if (srcf[i] != uary[uindex]) {
+                                 uindex+=1;
+                                 uary[uindex]=srcf[i];         
+                             } 
+                       }
+
+                       forall u in uary[0..uindex] {// for all the u
+                           var startu_adj:int;
+                           var endu_adj:int;
+                           var numu_adj:int;
+                           aggsrc.copy(startu_adj,sf[u]);
+                           aggsrc.copy(endu_adj,sf[u]+nf[u]-1);
+                           aggsrc.copy(numu_adj,nf[u]);
+                           aggsrc.flush();
+
+                           proc intersection_uv(uadj:[?D] int) {
+                               var ui:int;
+                               ui=0;
+                               var vj:int;
+                               vj=0;
+
+                               while (ui<=endu_adj-startu_adj) {// for all u_adj
+                                    v=uadj[ui+startu_adj];
+                                    var startv_adj:int;
+                                    var endv_adj:int;
+                                    var numv_adj:int;
+                                    aggsrc.copy(startv_adj,sf[v]);
+                                    aggsrc.copy(endv_adj,sf[v]+nf[v]-1);
+                                    aggsrc.copy(numv_adj,nf[v]);
+                                    aggsrc.flush();
+
+                                    proc intersection_v(vadj:[?D] int) {
+                                        while (vj<=endv_adj-startv_adj) {// for all v_adj
+                                             if (uadj[ui+startu_adj]==vadj[vj+startv_adj]) {
+                                                 triCount+=1;
+                                                 ui+=1;
+                                                 vj+=1;                    
+                                             } else {
+                                                 if (uadj[ui]>vadj[vj]) {
+                                                     vj+=1;
+                                                 } else {
+                                                     ui+=1;
+                                                 }
+                                             }
+                                        }// end while
+                                    }//end proc
+
+                                    if (endv_adj<=df.localSubdomain().high && startv_adj>=df.localSubdomain().low){
+                                         ref refvadj:df[startv_adj..endv_adj];
+                                         intersection_v(refvadj);
+                                    } else {
+                                         var valuevadj:[numv_adj] int;
+                                         forall (a,b) in zip(valuevadj,df[startv_adj..endv_adj]) with 
+                                               (var agg= newSrcAggregator(int)) {
+                                              agg.copy(a,b);
+                                         }
+                                         endv_adj=endv_adj-startv_adj;
+                                         startv_adj=0;
+                                         intersection_v(valuevadj);
+                                    }// end if
+                               }// end while
+                           }// end proc
+
+                           if (endu_adj<=df.localSubdomain().low){
+                               ref refuadj=df[startu_adj..endu_adj];
+                               intersection_uv(refuadj);
+                           } else {
+                               var valueuadj:[numu_adj] int;
+                               forall (a,b) in zip(uadj,df[startu_adj..endu_adj]) 
+                                      with (var agg= newSrcAggregator(int)) {
+                                     agg.copy(a,b);
+                               }
+                               endu_adj=endu_adj-startu_adj;
+                               startu_adj=0;
+                               intersection_uv(valueuadj);
+                           }
+                       }//end forall u
+                       subTriSum[here.id]+=triCount;
+                       writeln("locale =",here.id,"subTriSum=",subTriSum);
+                   }//end on loc
+            }//end forall loc
+            */
+            return "success";
+      }
+
+
+
+      proc tri_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
+                        neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int):string throws{
+          coforall loc in Locales   {
+                   on loc {
+                       var triCount=0:int;
+                       ref srcf=src;
+                       ref df=dst;
+                       ref nf=nei;
+                       ref sf=start_i;
+
+                       ref srcfR=srcR;
+                       ref dfR=dstR;
+                       ref nfR=neiR;
+                       ref sfR=start_iR;
+
+                       var ld=srcf.localSubdomain();
+                       var ldR=srcfR.localSubdomain();
+
+                       var startVer=srcf[ld.low];
+                       var endVer=srcf[ld.high];
+
+                       var startEdge=ld.low;
+                       var endEdge=ld.high;
+
+                       var lastVer=-1;
+
+                       var aggsrc= newSrcAggregator(int);
+
+                       if (startVer>0 && startEdge>0)  {
+                            aggsrc.copy(lastVer,srcf[startEdge-1]);
+                            startVer=lastVer+1;
+                       }
+                       if (ld.low==0) {
+                            startVer=0;
+                       }
+                       if (ld.high==D3.size-1) {
+                            endVer=D1.size-1;
+                       }
+
+                       coforall u in startVer..endVer with (ref triCount) {// for all the u
+                           writeln("Enter coforall u=",u);
+                           writeln("Enter coforall u=",u);
+                           //var uadj= new set(int,parSafe = true);
+                           var uadj= new set(int);
+                           var startu_adj:int;
+                           var endu_adj:int;
+                           var numu_adj:int;
+
+                           var startuR_adj:int;
+                           var enduR_adj:int;
+                           var numuR_adj:int;
+
+                           var aggu= newSrcAggregator(int);
+                           aggu.copy(startu_adj,sf[u]);
+                           aggu.copy(endu_adj,sf[u]+nf[u]-1);
+                           aggu.copy(numu_adj,nf[u]);
+                           //numu_adj=nf[u];
+
+                           aggu.copy(startuR_adj,sfR[u]);
+                           aggu.copy(enduR_adj,sfR[u]+nfR[u]-1);
+                           aggu.copy(numuR_adj,nfR[u]);
+
+                           if (numu_adj>0) {
+                               if (startu_adj>=ld.low && endu_adj<=ld.high) {
+                                   forall i in srcf[startu_adj..endu_adj] with (ref uadj) {
+                                         uadj.add(i);
+                                   }
+                               } else {
+                                   var tmpuadj: [0..numu_adj-1]int;
+                                   forall (a,b) in zip(tmpuadj,(startu_adj..endu_adj)) 
+                                             with (var agg= newSrcAggregator(int)) {
+                                             agg.copy(a,df[b]);
+                                   }
+                                   forall i in tmpuadj with (ref uadj) {
+                                         uadj.add(i);
+                                   }
+                               }
+                           }
+                           if (numuR_adj>0) {
+                               if (startuR_adj>=ldR.low && enduR_adj<=ldR.high) {
+                                   forall i in srcfR[startuR_adj..enduR_adj] with (ref uadj) {
+                                         uadj.add(i);
+                                   }
+                               } else {
+                                   var tmpuadj: [0..numuR_adj-1]int;
+                                   forall (a,b) in zip(tmpuadj,(startuR_adj..enduR_adj)) 
+                                             with (var agg= newSrcAggregator(int)) {
+                                             agg.copy(a,dfR[b]);
+                                   }
+                                   forall i in tmpuadj with (ref uadj) {
+                                         uadj.add(i);
+                                   }
+
+                               }
+
+                           }// end of building uadj 
+                           writeln("uadj=",uadj);
+
+                           forall v in uadj with (ref triCount) {
+                               writeln("Enter forall v =",v);
+                               //var vadj= new set(int,parSafe = true);
+                               var vadj= new set(int);
+                               var startv_adj:int;
+                               var endv_adj:int;
+                               var numv_adj:int;
+
+                               var startvR_adj:int;
+                               var endvR_adj:int;
+                               var numvR_adj:int;
+
+                               var aggv= newSrcAggregator(int);
+                               aggv.copy(startv_adj,sf[v]);
+                               aggv.copy(endv_adj,sf[v]+nf[v]-1);
+                               aggv.copy(numv_adj,nf[v]);
+
+                               aggv.copy(startvR_adj,sfR[v]);
+                               aggv.copy(endvR_adj,sfR[v]+nfR[v]-1);
+                               aggv.copy(numvR_adj,nfR[v]);
+
+                               if (numv_adj>0) {
+                                   if (startv_adj>=ld.low && endv_adj<=ld.high) {
+                                       forall i in srcf[startv_adj..endv_adj] with (ref vadj) {
+                                             vadj.add(i);
+                                       }
+                                   } else {
+                                       var tmpvadj: [0..numv_adj-1]int;
+                                       forall (a,b) in zip(tmpvadj,(startv_adj..endv_adj)) 
+                                             with (var agg= newSrcAggregator(int)) {
+                                             agg.copy(a,df[b]);
+                                       }
+                                       forall i in tmpvadj with (ref vadj) {
+                                             vadj.add(i);
+                                       }
+
+                                   }
+
+                               }
+                               if (numvR_adj>0) {
+                                   if (startvR_adj>=ldR.low && endvR_adj<=ldR.high) {
+                                       forall i in srcfR[startvR_adj..endvR_adj] with (ref vadj) {
+                                             vadj.add(i);
+                                       }
+                                   } else {
+                                       var tmpvadj: [0..numvR_adj-1]int;
+                                       forall (a,b) in zip(tmpvadj,(startvR_adj..endvR_adj)) 
+                                             with (var agg= newSrcAggregator(int)) {
+                                                 agg.copy(a,dfR[b]);
+                                       }
+                                       forall i in tmpvadj with (ref vadj) {
+                                             vadj.add(i);
+                                       }
+
+                                   }
+
+                               }
+                               writeln("v adj =",vadj);
+                               //var triset= new set(int,parSafe=true);
+                               var triset= new set(int);
+                               triset=uadj & vadj;
+                               triCount+=triset.size;
+                               vadj.clear();
+                               writeln("u=",u," v=",v);
+                               writeln("set=",triset);
+                               writeln("num tri=",triCount);
+                           }// end forall v adj build
+                           uadj.clear();
+                       }// end forall u adj build
+                       subTriSum[here.id]=triCount;
+                       writeln("locale =",here.id,"subTriSum=",subTriSum);
+                   }//end on loc
+          }//end coforall loc
+          return "success";
+      }//end of tri_kernel_u
+
+
+      proc return_tri_count(): string throws{
+          for i in subTriSum {
+             TotalCnt[0]+=i;
+          }
+          writeln("subTrisum=",subTriSum);
+          TotalCnt[0]/=3;
+          writeln("TotalCnt=",TotalCnt);
+          var countName = st.nextName();
+          var countEntry = new shared SymEntry(TotalCnt);
+          st.addEntry(countName, countEntry);
+
+          var cntMsg =  'created ' + st.attrib(countName);
+          return cntMsg;
+
+      }
+
+
+      if (Directed!=0) {
+          if (Weighted!=0) {
+               (srcN, dstN, startN, neighbourN,vweightN,eweightN)=
+                   restpart.splitMsgToTuple(6);
+              var ag = new owned SegGraphDW(Nv,Ne,Directed,Weighted,srcN,dstN,
+                                 startN,neighbourN,vweightN,eweightN, st);
+              tri_kernel(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a);
+
+          } else {
+
+              (srcN, dstN, startN, neighbourN)=restpart.splitMsgToTuple(4);
+              var ag = new owned SegGraphD(Nv,Ne,Directed,Weighted,srcN,dstN,
+                      startN,neighbourN,st);
+              tri_kernel(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a);
+          }
+      }
+      else {
+          if (Weighted!=0) {
+               (srcN, dstN, startN, neighbourN,srcRN, dstRN, startRN, neighbourRN,vweightN,eweightN)=
+                   restpart.splitMsgToTuple(10);
+               var ag = new owned SegGraphUDW(Nv,Ne,Directed,Weighted,
+                      srcN,dstN, startN,neighbourN,
+                      srcRN,dstRN, startRN,neighbourRN,
+                      vweightN,eweightN, st);
+              tri_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a);
+          } else {
+              (srcN, dstN, startN, neighbourN,srcRN, dstRN, startRN, neighbourRN)=
+                   restpart.splitMsgToTuple(8);
+              var ag = new owned SegGraphUD(Nv,Ne,Directed,Weighted,
+                      srcN,dstN, startN,neighbourN,
+                      srcRN,dstRN, startRN,neighbourRN,
+                      st);
+
+              tri_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a);
+          }
+      }
+      repMsg=return_tri_count();
+      timer.stop();
+      smLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+      return new MsgTuple(repMsg, MsgType.NORMAL);
+  }
+
+
+
 
 
 

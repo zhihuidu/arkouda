@@ -17,7 +17,7 @@ def time_ak_bfs_graph(lgNv:int, Ne_per_v:int, p:float,directed:int,weighted:int)
     print("Max Tasks =",cfg["maxTaskPar"])
     print("Memory =",cfg["physicalMemory"])
     
-    lgNv=10
+    lgNv=5
     Ne_per_v=3
     p=0.40
     directed=0

@@ -339,13 +339,15 @@ proc main() {
                 when "clear"             {repTuple = clearMsg(cmd, args, st);}               
 
 
-                when "segmentedSuffixAry"{repTuple = segSuffixArrayMsg(cmd, payload, st);}
-                when "segmentedLCP"      {repTuple = segLCPMsg(cmd, payload, st);}
-                when "segmentedSAFile"   {repTuple = segSAFileMsg(cmd, payload, st);}
-                when "segmentedGraphFile"   {repTuple = segGraphFileMsg(cmd, payload, st);}
-                when "segmentedRMAT"     {repTuple = segrmatgenMsg(cmd, payload, st);}
-                when "segmentedGraphBFS" {repTuple = segBFSMsg(cmd, payload, st);}
-                when "segmentedIn1dInt"  {repTuple = segIn1dIntMsg(cmd, payload, st);}
+                when "segmentedSuffixAry"{repTuple = segSuffixArrayMsg(cmd, args, st);}
+                when "segmentedLCP"      {repTuple = segLCPMsg(cmd, args, st);}
+                when "segmentedSAFile"   {repTuple = segSAFileMsg(cmd, args, st);}
+                when "segmentedGraphFile"   {repTuple = segGraphFileMsg(cmd, args, st);}
+                when "segmentedRMAT"     {repTuple = segrmatgenMsg(cmd, args, st);}
+                when "segmentedGraphBFS" {repTuple = segBFSMsg(cmd, args, st);}
+                when "segmentedIn1dInt"  {repTuple = segIn1dIntMsg(cmd, args, st);}
+                when "segmentedGraphTri" {repTuple = segTriMsg(cmd, args, st);}
+
 
 
 

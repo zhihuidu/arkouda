@@ -15,7 +15,7 @@ __all__ = ["array", "zeros", "ones", "zeros_like", "ones_like",
            "arange", "linspace", "randint", "uniform", "standard_normal",
            "random_strings_uniform", "random_strings_lognormal", 
            "from_series", "suffix_array","lcp_array","suffix_array_file",
-           "rmat_gen","graph_bfs","graph_file_read"]
+           "rmat_gen","graph_bfs","graph_file_read","graph_triangle"]
 
 @typechecked
 def from_series(series : pd.Series, 
@@ -855,10 +855,14 @@ def suffix_array(strings : Strings) -> SArrays:
             Raised if there is a server-side error in executing group request or
             creating the pdarray encapsulating the return message
         """
+        cmd = "segmentedSuffixAry"
+        args ="{} {} {}".format( strings.objtype,
+                                                        strings.offsets.name,
+                                                        strings.bytes.name) 
         msg = "segmentedSuffixAry {} {} {}".format( strings.objtype,
                                                         strings.offsets.name,
                                                         strings.bytes.name) 
-        repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
         return SArrays(*(cast(str,repMsg).split('+')))
 
 
@@ -883,12 +887,18 @@ def lcp_array(suffixarrays : SArrays, strings : Strings) -> SArrays:
             Raised if there is a server-side error in executing group request or
             creating the pdarray encapsulating the return message
         """
+        cmd = "segmentedLCP"
+        args= "{} {} {} {} {}".format( suffixarrays.objtype,
+                                                        suffixarrays.offsets.name,
+                                                        suffixarrays.bytes.name, 
+                                                        strings.offsets.name,
+                                                        strings.bytes.name) 
         msg = "segmentedLCP {} {} {} {} {}".format( suffixarrays.objtype,
                                                         suffixarrays.offsets.name,
                                                         suffixarrays.bytes.name, 
                                                         strings.offsets.name,
                                                         strings.bytes.name) 
-        repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
         return SArrays(*(cast(str,repMsg).split('+')))
 
 @typechecked
@@ -933,8 +943,10 @@ def suffix_array_file(filename: str)  -> tuple:
             Raised if there is a server-side error in executing group request or
             creating the pdarray encapsulating the return message
         """
-        msg = "segmentedSAFile {}".format( filename )
-        repMsg = generic_msg(msg)
+        cmd = "segmentedSAFile"
+        args= "{}".format( filename )
+        #repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
         tmpmsg=cast(str,repMsg).split('+')
         sastr=tmpmsg[0:2]
         strstr=tmpmsg[2:4]
@@ -975,8 +987,10 @@ def graph_file_read(Ne:int, Nv:int,Ncol:int,directed:int, filename: str)  -> Uni
         ------  
         RuntimeError
         """
-        msg = "segmentedGraphFile {} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename);
-        repMsg = generic_msg(msg)
+        cmd = "segmentedGraphFile"
+        args="{} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename);
+        #repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
         if (int(Ncol) >2) :
              weighted=1
         else:
@@ -1013,8 +1027,11 @@ def rmat_gen (lgNv:int, Ne_per_v:int, p:float, directed: int,weighted:int) ->\
         ------  
         RuntimeError
         """
+        cmd = "segmentedRMAT"
+        args= "{} {} {} {} {}".format(lgNv, Ne_per_v, p, directed, weighted)
         msg = "segmentedRMAT {} {} {} {} {}".format(lgNv, Ne_per_v, p, directed, weighted)
-        repMsg = generic_msg(msg)
+        #repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
         if (directed!=0)  :
            if (weighted!=0) :
                return GraphDW(*(cast(str,repMsg).split('+')))
@@ -1046,11 +1063,13 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
         ------  
         RuntimeError
         """
+        cmd="segmentedGraphBFS"
         #if (cast(int,graph.directed)!=0)  :
         if (int(graph.directed)>0)  :
             if (int(graph.weighted)==0):
               # directed unweighted GraphD
-              msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {}".format(
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {}".format(
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
@@ -1058,7 +1077,8 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
                  root)
             else:
               # directed weighted GraphDW
-              msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {}".format(
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {}".format(
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
@@ -1068,7 +1088,8 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
         else:
             if (int(graph.weighted)==0):
               # undirected unweighted GraphUD
-              msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {} {} {}".format(
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
@@ -1078,7 +1099,8 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
                  root)
             else:
               # undirected weighted GraphUDW 15
-              msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
@@ -1088,7 +1110,8 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
                  graph.v_weight.name,graph.e_weight.name,\
                  root)
 
-        repMsg = generic_msg(msg)
+        #repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
         '''
         tmpmsg=cast(str,repMsg).split('+')
         levelstr=tmpmsg[0:1]
@@ -1100,6 +1123,81 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
         return create_pdarray(repMsg)
         #return (levelary,vertexary)
 
+
+@typechecked
+def graph_triangle (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW]) -> pdarray:
+        """
+        This function will return the number of triangles in a static graph.
+        Returns
+        -------
+        pdarray
+            The total number of triangles.
+
+        See Also
+        --------
+
+        Notes
+        -----
+        
+        Raises
+        ------  
+        RuntimeError
+        """
+        cmd="segmentedGraphTri"
+        #if (cast(int,graph.directed)!=0)  :
+        if (int(graph.directed)>0)  :
+            if (int(graph.weighted)==0):
+              # directed unweighted GraphD
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {}".format(
+                 graph.n_vertices,graph.n_edges,\
+                 graph.directed,graph.weighted,\
+                 graph.src.name,graph.dst.name,\
+                 graph.start_i.name,graph.neighbour.name )
+            else:
+              # directed weighted GraphDW
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {}".format(
+                 graph.n_vertices,graph.n_edges,\
+                 graph.directed,graph.weighted,\
+                 graph.src.name,graph.dst.name,\
+                 graph.start_i.name,graph.neighbour.name,\
+                 graph.v_weight.name,graph.e_weight.name )
+        else:
+            if (int(graph.weighted)==0):
+              # undirected unweighted GraphUD
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {} {}".format(
+                 graph.n_vertices,graph.n_edges,\
+                 graph.directed,graph.weighted,\
+                 graph.src.name,graph.dst.name,\
+                 graph.start_i.name,graph.neighbour.name,\
+                 graph.srcR.name,graph.dstR.name,\
+                 graph.start_iR.name,graph.neighbourR.name )
+            else:
+              # undirected weighted GraphUDW 15
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+                 graph.n_vertices,graph.n_edges,\
+                 graph.directed,graph.weighted,\
+                 graph.src.name,graph.dst.name,\
+                 graph.start_i.name,graph.neighbour.name,\
+                 graph.srcR.name,graph.dstR.name,\
+                 graph.start_iR.name,graph.neighbourR.name,\
+                 graph.v_weight.name,graph.e_weight.name)
+
+        #repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
+        '''
+        tmpmsg=cast(str,repMsg).split('+')
+        levelstr=tmpmsg[0:1]
+        vertexstr=tmpmsg[1:2]
+        levelary=create_pdarray(*(cast(str,levelstr)) )
+        
+        vertexary=create_pdarray(*(cast(str,vertexstr)) )
+        '''
+        return create_pdarray(repMsg)
+        #return (levelary,vertexary)
 
 @typechecked
 def graph_dfs (graph: Union[GraphD,GraphUD,GraphDW,GraphUDW], root: int ) -> tuple:
@@ -1153,6 +1251,8 @@ def components (graph:  Union[GraphD,GraphUD,GraphDW,GraphUDW] ) -> int :
         ------  
         RuntimeError
         """
+        cmd = "segmentedGraphComponents"
+        args= "{} {}".format(graph.edges.name,graph.vertices.name)
         msg = "segmentedGraphComponents {} {}".format(graph.edges.name,graph.vertices.name)
-        repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
         return cast(int,repMsg)
