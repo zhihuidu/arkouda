@@ -2906,7 +2906,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
               totalLocal+=i;
           }
           TotalCnt[0]/=3;
-          writeln("LocalRatio=", totalLocal/(totalRemote+totalLocal),"TotalTimes=",totalRemote+totalLocal);
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("TriangleNumber=", TotalCnt[0]);
+          writeln("LocalRatio=", (totalLocal:real)/((totalRemote+totalLocal):real),"TotalTimes=",totalRemote+totalLocal);
+          writeln("LocalAccessTimes=", totalLocal,",RemoteAccessTimes=",totalRemote);
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           //writeln("1000 Locale=",here.id, " subTriSum=", subTriSum, "TotalCnt=",TotalCnt);
           var countName = st.nextName();
           var countEntry = new shared SymEntry(TotalCnt);
