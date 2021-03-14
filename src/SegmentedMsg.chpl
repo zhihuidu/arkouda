@@ -2754,7 +2754,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                            if (numu_adj>0) {
                                if (startu_adj>=ld.low && endu_adj<=ld.high) {
-                                   forall i in df[startu_adj..endu_adj] with (ref uadj) {
+                                   forall i in df[startu_adj..endu_adj] with (ref uadj,ref localCnt) {
                                          uadj.add(i);
                                          localCnt+=1;
                                          //writeln("7 Locale=",here.id,  " u=",u, " add local ",i);
@@ -2765,7 +2765,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                              with (var agg= newSrcAggregator(int)) {
                                              agg.copy(a,df[b]);
                                    }
-                                   forall i in tmpuadj with (ref uadj) {
+                                   forall i in tmpuadj with (ref uadj,ref remoteCnt) {
                                          uadj.add(i);
                                          remoteCnt+=1;
                                          //writeln("7 Locale=",here.id,  " u=",u, " add remote ",i);
