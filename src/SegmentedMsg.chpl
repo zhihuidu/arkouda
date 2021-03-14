@@ -2349,6 +2349,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                            SetNextF.add(j);
                                         }
                                    }
+                               
                               }
                        }// end forall
                    }//end on loc
@@ -2543,8 +2544,12 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       var timer:Timer;
       timer.start();
 
-      var TotalCnt=0:[0..1] int;
+      var TotalCnt=0:[0..0] int;
       var subTriSum=0: [0..numLocales-1] int;
+      var StartVerAry=-1: [0..numLocales-1] int;
+      var EndVerAry=-1: [0..numLocales-1] int;
+      var RemoteAccessTimes=0: [0..numLocales-1] int;
+      var LocalAccessTimes=0: [0..numLocales-1] int;
 
       var srcN, dstN, startN, neighbourN,vweightN,eweightN, rootN :string;
       var srcRN, dstRN, startRN, neighbourRN:string;
@@ -2678,6 +2683,8 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           coforall loc in Locales   {
                    on loc {
                        var triCount=0:int;
+                       var remoteCnt=0:int;
+                       var localCnt=0:int;
                        ref srcf=src;
                        ref df=dst;
                        ref nf=nei;
@@ -2691,32 +2698,41 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        var ld=srcf.localSubdomain();
                        var ldR=srcfR.localSubdomain();
 
+                       // first we divide vertices based on the number of edges
                        var startVer=srcf[ld.low];
                        var endVer=srcf[ld.high];
 
+                       StartVerAry[here.id]=startVer;
+                       EndVerAry[here.id]=endVer;
                        var startEdge=ld.low;
                        var endEdge=ld.high;
 
                        var lastVer=-1;
 
-                       var aggsrc= newSrcAggregator(int);
+                       //writeln("1 Locale=",here.id, " local domain=", ld, ", Reverse local domain=",ldR);
 
-                       if (startVer>0 && startEdge>0)  {
-                            aggsrc.copy(lastVer,srcf[startEdge-1]);
-                            startVer=lastVer+1;
+                       if (here.id>0) {
+                          if EndVerAry[here.id-1]==StartVerAry[here.id] {
+                             startVer+=1;    
+                          } else {
+                             if (StartVerAry[here.id]-EndVerAry[here.id-1]>2 ){
+                                startVer=EndVerAry[here.id-1]+1;
+                             }
+                          }
+                          if (here.id==numLocales-1) {
+                             endVer=nei.size-1;
+                          }
                        }
-                       if (ld.low==0) {
-                            startVer=0;
-                       }
-                       if (ld.high==D3.size-1) {
-                            endVer=D1.size-1;
+                       if (here.id ==0 ) {
+                          startVer=0;
                        }
 
-                       coforall u in startVer..endVer with (ref triCount) {// for all the u
-                           writeln("Enter coforall u=",u);
-                           writeln("Enter coforall u=",u);
-                           //var uadj= new set(int,parSafe = true);
-                           var uadj= new set(int);
+                       //writeln("3 Locale=",here.id, " Updated Starting/End Vertex=[",startVer, ",", endVer, "], StarAry=", StartVerAry, " EndAry=", EndVerAry);
+                       forall u in startVer..endVer with (ref triCount,ref remoteCnt, ref localCnt) {// for all the u
+                           //writeln("4 Locale=",here.id, " u=",u, " Enter coforall path");
+                           var uadj= new set(int,parSafe = true);
+                           //var uadj= new set(int);
+                           //var uadj=  new DistBag(int,Locales); //use bag to keep the adjacency of u
                            var startu_adj:int;
                            var endu_adj:int;
                            var numu_adj:int;
@@ -2729,16 +2745,19 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            aggu.copy(startu_adj,sf[u]);
                            aggu.copy(endu_adj,sf[u]+nf[u]-1);
                            aggu.copy(numu_adj,nf[u]);
-                           //numu_adj=nf[u];
 
                            aggu.copy(startuR_adj,sfR[u]);
                            aggu.copy(enduR_adj,sfR[u]+nfR[u]-1);
                            aggu.copy(numuR_adj,nfR[u]);
+                           aggu.flush();
+                           //writeln("6 Locale=",here.id, " u[",startu_adj, ",",endu_adj, "], num=",numu_adj);
 
                            if (numu_adj>0) {
                                if (startu_adj>=ld.low && endu_adj<=ld.high) {
-                                   forall i in srcf[startu_adj..endu_adj] with (ref uadj) {
+                                   forall i in df[startu_adj..endu_adj] with (ref uadj) {
                                          uadj.add(i);
+                                         localCnt+=1;
+                                         //writeln("7 Locale=",here.id,  " u=",u, " add local ",i);
                                    }
                                } else {
                                    var tmpuadj: [0..numu_adj-1]int;
@@ -2748,13 +2767,17 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                    }
                                    forall i in tmpuadj with (ref uadj) {
                                          uadj.add(i);
+                                         remoteCnt+=1;
+                                         //writeln("7 Locale=",here.id,  " u=",u, " add remote ",i);
                                    }
                                }
                            }
                            if (numuR_adj>0) {
                                if (startuR_adj>=ldR.low && enduR_adj<=ldR.high) {
-                                   forall i in srcfR[startuR_adj..enduR_adj] with (ref uadj) {
+                                   forall i in dfR[startuR_adj..enduR_adj] with (ref uadj,ref localCnt) {
                                          uadj.add(i);
+                                         localCnt+=1;
+                                         // writeln("8 Locale=",here.id,  " u=",u, " add reverse lodal ",i);
                                    }
                                } else {
                                    var tmpuadj: [0..numuR_adj-1]int;
@@ -2762,19 +2785,24 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                              with (var agg= newSrcAggregator(int)) {
                                              agg.copy(a,dfR[b]);
                                    }
-                                   forall i in tmpuadj with (ref uadj) {
+                                   forall i in tmpuadj with (ref uadj,ref remoteCnt) {
                                          uadj.add(i);
+                                         remoteCnt+=1;
+                                         //writeln("8 Locale=",here.id,  " u=",u, " add reverse remote ",i);
                                    }
 
                                }
 
                            }// end of building uadj 
-                           writeln("uadj=",uadj);
+                           //writeln("9 Locale=",here.id, " u=",u," got uadj=",uadj, " numu_adj=", numu_adj," numuR_adj=", numuR_adj);
 
-                           forall v in uadj with (ref triCount) {
-                               writeln("Enter forall v =",v);
-                               //var vadj= new set(int,parSafe = true);
-                               var vadj= new set(int);
+                           forall v in uadj with (ref triCount,ref uadj,ref remoteCnt, ref localCnt) {
+                             if (u<v ) {
+
+                               //writeln("10 Locale=",here.id, " u=",u," and v=",v, " enter forall");
+                               var vadj= new set(int,parSafe = true);
+                               //var vadj= new set(int);
+                               //var vadj=  new DistBag(int,Locales); //use bag to keep the adjacency of v
                                var startv_adj:int;
                                var endv_adj:int;
                                var numv_adj:int;
@@ -2791,11 +2819,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                aggv.copy(startvR_adj,sfR[v]);
                                aggv.copy(endvR_adj,sfR[v]+nfR[v]-1);
                                aggv.copy(numvR_adj,nfR[v]);
+                               aggv.flush();
 
                                if (numv_adj>0) {
                                    if (startv_adj>=ld.low && endv_adj<=ld.high) {
-                                       forall i in srcf[startv_adj..endv_adj] with (ref vadj) {
+                                       forall i in df[startv_adj..endv_adj] with (ref vadj,ref localCnt) {
                                              vadj.add(i);
+                                             localCnt+=1;
+                                             //writeln("11 Locale=",here.id,  " v=",v, " add local ",i);
                                        }
                                    } else {
                                        var tmpvadj: [0..numv_adj-1]int;
@@ -2803,8 +2834,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                              with (var agg= newSrcAggregator(int)) {
                                              agg.copy(a,df[b]);
                                        }
-                                       forall i in tmpvadj with (ref vadj) {
+                                       forall i in tmpvadj with (ref vadj,ref remoteCnt) {
                                              vadj.add(i);
+                                             remoteCnt+=1;
+                                             //writeln("11 Locale=",here.id,  " v=",v, " add remote ",i);
                                        }
 
                                    }
@@ -2812,8 +2845,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                }
                                if (numvR_adj>0) {
                                    if (startvR_adj>=ldR.low && endvR_adj<=ldR.high) {
-                                       forall i in srcfR[startvR_adj..endvR_adj] with (ref vadj) {
+                                       forall i in dfR[startvR_adj..endvR_adj] with (ref vadj,ref localCnt) {
                                              vadj.add(i);
+                                             localCnt+=1;
+                                             //writeln("12 Locale=",here.id,  " v=",v, " add reverse local ",i);
                                        }
                                    } else {
                                        var tmpvadj: [0..numvR_adj-1]int;
@@ -2821,27 +2856,37 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                              with (var agg= newSrcAggregator(int)) {
                                                  agg.copy(a,dfR[b]);
                                        }
-                                       forall i in tmpvadj with (ref vadj) {
+                                       forall i in tmpvadj with (ref vadj,ref remoteCnt) {
                                              vadj.add(i);
+                                             remoteCnt+=1;
+                                             //writeln("12 Locale=",here.id,  " v=",v, " add reverse remote ",i);
                                        }
 
                                    }
 
                                }
-                               writeln("v adj =",vadj);
                                //var triset= new set(int,parSafe=true);
-                               var triset= new set(int);
-                               triset=uadj & vadj;
-                               triCount+=triset.size;
-                               vadj.clear();
-                               writeln("u=",u," v=",v);
-                               writeln("set=",triset);
-                               writeln("num tri=",triCount);
+                               //var triset= new set(int);
+                               //triset=uadj & vadj;
+                               //writeln("30 Locale=",here.id, " u=",u, " v=",v, " uadj=",uadj, " vadj=",vadj);
+                               //var num=uadj.getSize();
+                               var num=vadj.size;
+                               var tu:int;
+                               forall i in vadj with (ref triCount) {
+                                   if uadj.contains(i) {
+                                      triCount+=1;
+                                   }
+                               }
+                               //writeln("31 Locale=",here.id, "tri=", triCount," u=",u, " v=",v);
+                               //vadj.clear();
+                             }
                            }// end forall v adj build
-                           uadj.clear();
+                           //uadj.clear();
                        }// end forall u adj build
                        subTriSum[here.id]=triCount;
-                       writeln("locale =",here.id,"subTriSum=",subTriSum);
+                       RemoteAccessTimes[here.id]=remoteCnt;
+                       LocalAccessTimes[here.id]=localCnt;
+                       //writeln("100 Locale=",here.id, " subTriSum=", subTriSum);
                    }//end on loc
           }//end coforall loc
           return "success";
@@ -2852,9 +2897,17 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           for i in subTriSum {
              TotalCnt[0]+=i;
           }
-          writeln("subTrisum=",subTriSum);
+          var totalRemote=0:int;
+          var totalLocal=0:int;
+          for i in RemoteAccessTimes {
+              totalRemote+=i;
+          }
+          for i in LocalAccessTimes {
+              totalLocal+=i;
+          }
           TotalCnt[0]/=3;
-          writeln("TotalCnt=",TotalCnt);
+          writeln("LocalRatio=", totalLocal/(totalRemote+totalLocal),"TotalTimes=",totalRemote+totalLocal);
+          //writeln("1000 Locale=",here.id, " subTriSum=", subTriSum, "TotalCnt=",TotalCnt);
           var countName = st.nextName();
           var countEntry = new shared SymEntry(TotalCnt);
           st.addEntry(countName, countEntry);
