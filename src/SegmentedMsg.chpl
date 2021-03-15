@@ -2796,7 +2796,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            }// end of building uadj 
                            //writeln("9 Locale=",here.id, " u=",u," got uadj=",uadj, " numu_adj=", numu_adj," numuR_adj=", numuR_adj);
 
-                           forall v in uadj with (ref triCount,ref uadj,+ reduce remoteCnt, + reduce localCnt) {
+                           forall v in uadj with (+reduce triCount,ref uadj,+ reduce remoteCnt, + reduce localCnt) {
                              if (u<v ) {
 
                                //writeln("10 Locale=",here.id, " u=",u," and v=",v, " enter forall");
