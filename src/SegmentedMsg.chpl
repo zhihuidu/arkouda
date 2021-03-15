@@ -1771,17 +1771,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            (a,b)=  line.splitMsgToTuple(2);
                       } else {
                            (a,b,c)=  line.splitMsgToTuple(3);
-                            if ewlocal.contains(curline){
+                            if ewlocal.contains(Streamcurline){
                                 e_weight[Streamcurline]=c:int;
                             }
                       }
-                      if srclocal.contains(curline) {
-                          src[Streamcurline]=(a:int)%Streamcurline;
-                          dst[Streamcurline]=(b:int)%Streamcurline;
+                      if srclocal.contains(Streamcurline) {
+                          src[Streamcurline]=(a:int)%StreamNv;
+                          dst[Streamcurline]=(b:int)%StreamNv;
                       }
-                      //if dstlocal.contains(curline) {
-                      //    dst[Streamcurline]=b:int;
-                      //}
                       curline+=1;
                       Streamcurline=curline%StreamNe;
                   } 
