@@ -343,6 +343,7 @@ proc main() {
                 when "segmentedLCP"      {repTuple = segLCPMsg(cmd, args, st);}
                 when "segmentedSAFile"   {repTuple = segSAFileMsg(cmd, args, st);}
                 when "segmentedGraphFile"   {repTuple = segGraphFileMsg(cmd, args, st);}
+                when "segmentedStreamFile"   {repTuple = segStreamFileMsg(cmd, args, st);}
                 when "segmentedRMAT"     {repTuple = segrmatgenMsg(cmd, args, st);}
                 when "segmentedGraphBFS" {repTuple = segBFSMsg(cmd, args, st);}
                 when "segmentedIn1dInt"  {repTuple = segIn1dIntMsg(cmd, args, st);}

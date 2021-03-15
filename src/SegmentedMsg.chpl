@@ -1709,6 +1709,455 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
   }
 
 
+// directly read a stream from given file and build the SegGraph class in memory
+  proc segStreamFileMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+      var (NeS,NvS,ColS,DirectedS, FileName) = payload.splitMsgToTuple(5);
+      //writeln("======================Graph Reading=====================");
+      //writeln(NeS,NvS,ColS,DirectedS, FileName);
+      var Ne=NeS:int;
+      var Nv=NvS:int;
+      var Factor=4:int;
+      var StreamNe=Ne/Factor:int;
+      var StreamNv=Nv/Factor:int;
+      var NumCol=ColS:int;
+      var directed=DirectedS:int;
+      var weighted=0:int;
+      var timer: Timer;
+      if NumCol>2 {
+           weighted=1;
+      }
+
+      timer.start();
+      var src=makeDistArray(StreamNe,int);
+      var dst=makeDistArray(StreamNe,int);
+      //var length=makeDistArray(StreamNv,int);
+      var neighbour=makeDistArray(StreamNv,int);
+      var start_i=makeDistArray(StreamNv,int);
+
+      var e_weight = makeDistArray(StreamNe,int);
+      var v_weight = makeDistArray(StreamNv,int);
+
+      var iv=makeDistArray(StreamNe,int);
+
+      var srcR=makeDistArray(StreamNe,int);
+      var dstR=makeDistArray(StreamNe,int);
+      var neighbourR=makeDistArray(StreamNv,int);
+      var start_iR=makeDistArray(StreamNv,int);
+      ref  ivR=iv;
+
+      var linenum=0:int;
+
+      var repMsg: string;
+
+      var startpos, endpos:int;
+      var sort:int;
+      var filesize:int;
+
+      proc readLinebyLine() throws {
+           coforall loc in Locales  {
+              on loc {
+                  var f = open(FileName, iomode.r);
+                  var r = f.reader(kind=ionative);
+                  var line:string;
+                  var a,b,c:string;
+                  var curline=0:int;
+                  var Streamcurline=0:int;
+                  var srclocal=src.localSubdomain();
+                  var dstlocal=dst.localSubdomain();
+                  var ewlocal=e_weight.localSubdomain();
+
+                  while r.readline(line) {
+                      if NumCol==2 {
+                           (a,b)=  line.splitMsgToTuple(2);
+                      } else {
+                           (a,b,c)=  line.splitMsgToTuple(3);
+                            if ewlocal.contains(curline){
+                                e_weight[Streamcurline]=c:int;
+                            }
+                      }
+                      if srclocal.contains(curline) {
+                          src[Streamcurline]=(a:int)%Streamcurline;
+                          dst[Streamcurline]=(b:int)%Streamcurline;
+                      }
+                      //if dstlocal.contains(curline) {
+                      //    dst[Streamcurline]=b:int;
+                      //}
+                      curline+=1;
+                      Streamcurline=curline%StreamNe;
+                  } 
+                  forall i in src.localSubdomain() {
+                       src[i]=src[i]+(src[i]==dst[i]);
+                       src[i]=src[i]%StreamNv;
+                       dst[i]=dst[i]%StreamNv;
+                  }
+                  forall i in start_i.localSubdomain()  {
+                       start_i[i]=-1;
+                  }
+                  forall i in neighbour.localSubdomain()  {
+                       neighbour[i]=0;
+                  }
+                  forall i in start_iR.localSubdomain()  {
+                       start_iR[i]=-1;
+                  }
+                  forall i in neighbourR.localSubdomain()  {
+                       neighbourR[i]=0;
+                  }
+                  r.close();
+                  f.close();
+               }// end on loc
+           }//end coforall
+      }//end readLinebyLine
+      
+      readLinebyLine();
+      //start_i=-1;
+      //start_iR=-1;
+      timer.stop();
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$ Reading File takes ", timer.elapsed()," $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      timer.start();
+      proc twostep_sort() {
+        iv = radixSortLSD_ranks(src);
+        // permute into sorted order
+        var tmpedges=src;
+        coforall loc in Locales  {
+           on loc {
+              forall i in tmpedges.localSubdomain(){
+                   tmpedges[i] = src[iv[i]]; //# permute first vertex into sorted order
+              }
+              forall i in src.localSubdomain(){
+                   src[i] = tmpedges[i]; //# permute first vertex into sorted order
+              }
+              forall i in tmpedges.localSubdomain(){
+                   tmpedges[i] = dst[iv[i]]; //# permute first vertex into sorted order
+              }
+              forall i in dst.localSubdomain(){
+                   dst[i] = tmpedges[i]; //# permute first vertex into sorted order
+              }
+              if (weighted){
+                  forall i in tmpedges.localSubdomain(){
+                        tmpedges[i] = e_weight[iv[i]]; //# permute first vertex into sorted order
+                  }
+                  forall i in e_weight.localSubdomain(){
+                       e_weight[i] = tmpedges[i]; //# permute first vertex into sorted order
+                  }
+              }// end weighted
+           }//end loc
+        }//end coforall
+        //tmpedges = src[iv]; //# permute first vertex into sorted order
+        //src=tmpedges;
+        //tmpedges = dst[iv]; //# permute second vertex into sorted order
+        //dst=tmpedges;
+        startpos=0;
+        sort=0;
+        while (startpos < StreamNe-2) {
+           endpos=startpos+1;
+           sort=0;
+           while (endpos <=StreamNe-1) {
+              if (src[startpos]==src[endpos])  {
+                 sort=1;
+                 endpos+=1;
+                 continue;
+              } else {
+                 break;
+              }
+           }//end of while endpos
+           if (sort==1) {
+              var tmpary:[0..endpos-startpos-1] int;
+              tmpary=dst[startpos..endpos-1];
+              var ivx=radixSortLSD_ranks(tmpary);
+              dst[startpos..endpos-1]=tmpary[ivx];
+              sort=0;
+           }
+           startpos+=1;
+        }//end of while startpos
+      }// end of twostep_sort()
+
+      proc combine_sort() throws {
+             param bitsPerDigit = RSLSD_bitsPerDigit;
+             var bitWidths: [0..1] int;
+             var negs: [0..1] bool;
+             var totalDigits: int;
+             var size=StreamNe: int;
+
+             for (bitWidth, ary, neg) in zip(bitWidths, [src,dst], negs) {
+                       (bitWidth, neg) = getBitWidth(ary); 
+                       totalDigits += (bitWidth + (bitsPerDigit-1)) / bitsPerDigit;
+             }
+             proc mergedArgsort(param numDigits) throws {
+                    //overMemLimit(((4 + 3) * size * (numDigits * bitsPerDigit / 8))
+                    //             + (2 * here.maxTaskPar * numLocales * 2**16 * 8));
+                    var merged = makeDistArray(size, numDigits*uint(bitsPerDigit));
+                    var curDigit = numDigits - totalDigits;
+                    for (ary , nBits, neg) in zip([src,dst], bitWidths, negs) {
+                        proc mergeArray(type t) {
+                            ref A = ary;
+                            const r = 0..#nBits by bitsPerDigit;
+                            for rshift in r {
+                                 const myDigit = (r.high - rshift) / bitsPerDigit;
+                                 const last = myDigit == 0;
+                                 forall (m, a) in zip(merged, A) {
+                                     m[curDigit+myDigit] =  getDigit(a, rshift, last, neg):uint(bitsPerDigit);
+                                 }
+                            }
+                            curDigit += r.size;
+                        }
+                        mergeArray(int); 
+                    }
+                    var tmpiv = argsortDefault(merged);
+                    return tmpiv;
+             }
+
+             try {
+                 if totalDigits <=  4 { 
+                      iv = mergedArgsort( 4); 
+                 }
+                 if (totalDigits >  4) && ( totalDigits <=  8) { 
+                      iv =  mergedArgsort( 8); 
+                 }
+                 if (totalDigits >  8) && ( totalDigits <=  16) { 
+                      iv = mergedArgsort(16); 
+                 }
+                 if (totalDigits >  16) && ( totalDigits <=  32) { 
+                      iv = mergedArgsort(32); 
+                 }
+                 if (totalDigits >32) {    
+                      return "Error, TotalDigits >32";
+                 }
+
+             } catch e: Error {
+                  smLogger.error(getModuleName(),getRoutineName(),getLineNumber(),
+                      e.message());
+                    return "Error: %t".format(e.message());
+             }
+             var tmpedges=src[iv];
+             src=tmpedges;
+             tmpedges=dst[iv];
+             dst=tmpedges;
+             if (weighted){
+                tmpedges=e_weight[iv];
+                e_weight=tmpedges;
+             }
+
+             return "success";
+      }//end combine_sort
+
+      proc set_neighbour(){ 
+          for i in 0..StreamNe-1 do {
+             neighbour[src[i]]+=1;
+             if (start_i[src[i]] ==-1){
+                 start_i[src[i]]=i;
+             }
+          }
+      }
+
+      //twostep_sort();
+      combine_sort();
+      set_neighbour();
+
+      if (directed==0) { //undirected graph
+          proc twostep_sortR(){
+             var ivR = radixSortLSD_ranks(srcR);
+             var tmpedges=src;
+             tmpedges = srcR[ivR]; //# permute first vertex into sorted order
+             srcR=tmpedges;
+             tmpedges = dstR[ivR]; //# permute second vertex into sorted order
+             dstR=tmpedges;
+             startpos=0;
+             sort=0;
+             while (startpos < StreamNe-2) {
+                 endpos=startpos+1;
+                 sort=0;
+                 while (endpos <=StreamNe-1) {
+                     if (srcR[startpos]==srcR[endpos])  {
+                        sort=1;
+                        endpos+=1;
+                        continue;
+                      } else {
+                          break;
+                      }
+                 }//end of while endpos
+                 if (sort==1) {
+                     var tmparyR:[0..endpos-startpos-1] int;
+                     tmparyR=dstR[startpos..endpos-1];
+                     var ivxR=radixSortLSD_ranks(tmparyR);
+                     dstR[startpos..endpos-1]=tmparyR[ivxR];
+                     sort=0;
+                 }
+                 startpos+=1;
+             }//end of while startpos
+          }// end of two step R
+
+
+          proc combine_sortR() throws {
+             /* we cannot use the coargsort version because it will break the memory limit */
+             param bitsPerDigit = RSLSD_bitsPerDigit;
+             var bitWidths: [0..1] int;
+             var negs: [0..1] bool;
+             var totalDigits: int;
+             var size=StreamNe: int;
+             for (bitWidth, ary, neg) in zip(bitWidths, [srcR,dstR], negs) {
+                 (bitWidth, neg) = getBitWidth(ary); 
+                 totalDigits += (bitWidth + (bitsPerDigit-1)) / bitsPerDigit;
+
+             }
+             proc mergedArgsort(param numDigits) throws {
+               //overMemLimit(((4 + 3) * size * (numDigits * bitsPerDigit / 8))
+               //          + (2 * here.maxTaskPar * numLocales * 2**16 * 8));
+               var merged = makeDistArray(size, numDigits*uint(bitsPerDigit));
+               var curDigit = numDigits - totalDigits;
+               for (ary , nBits, neg) in zip([srcR,dstR], bitWidths, negs) {
+                  proc mergeArray(type t) {
+                     ref A = ary;
+                     const r = 0..#nBits by bitsPerDigit;
+                     for rshift in r {
+                        const myDigit = (r.high - rshift) / bitsPerDigit;
+                        const last = myDigit == 0;
+                        forall (m, a) in zip(merged, A) {
+                             m[curDigit+myDigit] =  getDigit(a, rshift, last, neg):uint(bitsPerDigit);
+                        }
+                     }
+                     curDigit += r.size;
+                  }
+                  mergeArray(int); 
+               }
+               var tmpiv = argsortDefault(merged);
+               return tmpiv;
+             } 
+
+             try {
+                 if totalDigits <=  4 { 
+                      ivR = mergedArgsort( 4); 
+                 }
+                 if (totalDigits >  4) && ( totalDigits <=  8) { 
+                      ivR =  mergedArgsort( 8); 
+                 }
+                 if (totalDigits >  8) && ( totalDigits <=  16) { 
+                      ivR = mergedArgsort(16); 
+                 }
+                 if (totalDigits >  16) && ( totalDigits <=  32) { 
+                      ivR = mergedArgsort(32); 
+                 }
+             } catch e: Error {
+                  smLogger.error(getModuleName(),getRoutineName(),getLineNumber(),
+                      e.message());
+                    return "Error: %t".format(e.message());
+             }
+
+             var tmpedges = srcR[ivR]; 
+             srcR=tmpedges;
+             tmpedges = dstR[ivR]; 
+             dstR=tmpedges;
+             return "success";
+
+          }// end combine_sortR
+
+
+          proc set_neighbourR(){
+             for i in 0..StreamNe-1 do {
+                neighbourR[srcR[i]]+=1;
+                if (start_iR[srcR[i]] ==-1){
+                    start_iR[srcR[i]]=i;
+                }
+             }
+          }
+          //twostep_sortR();
+          coforall loc in Locales  {
+              on loc {
+                  forall i in srcR.localSubdomain(){
+                        srcR[i]=dst[i];
+                        dstR[i]=src[i];
+                   }
+              }
+          }
+          combine_sortR();
+          set_neighbourR();
+
+      }//end of undirected
+
+
+      var ewName ,vwName:string;
+      if (weighted!=0) {
+        fillInt(v_weight,1,1000);
+        //fillRandom(v_weight,0,100);
+        ewName = st.nextName();
+        vwName = st.nextName();
+        var vwEntry = new shared SymEntry(v_weight);
+        var ewEntry = new shared SymEntry(e_weight);
+        st.addEntry(vwName, vwEntry);
+        st.addEntry(ewName, ewEntry);
+      }
+      var srcName = st.nextName();
+      var dstName = st.nextName();
+      var startName = st.nextName();
+      var neiName = st.nextName();
+      var srcEntry = new shared SymEntry(src);
+      var dstEntry = new shared SymEntry(dst);
+      var startEntry = new shared SymEntry(start_i);
+      var neiEntry = new shared SymEntry(neighbour);
+      st.addEntry(srcName, srcEntry);
+      st.addEntry(dstName, dstEntry);
+      st.addEntry(startName, startEntry);
+      st.addEntry(neiName, neiEntry);
+      var sNv=StreamNv:string;
+      var sNe=StreamNe:string;
+      var sDirected=directed:string;
+      var sWeighted=weighted:string;
+
+      var srcNameR, dstNameR, startNameR, neiNameR:string;
+      if (directed!=0) {//for directed graph
+          if (weighted!=0) {// for weighted graph
+              repMsg =  sNv + '+ ' + sNe + '+ ' + sDirected + '+ ' + sWeighted +
+                    '+created ' + st.attrib(srcName)   + '+created ' + st.attrib(dstName) +
+                    '+created ' + st.attrib(startName) + '+created ' + st.attrib(neiName) +
+                    '+created ' + st.attrib(vwName)    + '+created ' + st.attrib(ewName);
+          } else {// for unweighted graph
+              repMsg =  sNv + '+ ' + sNe + '+ ' + sDirected + '+ ' + sWeighted +
+                    '+created ' + st.attrib(srcName)   + '+created ' + st.attrib(dstName) +
+                    '+created ' + st.attrib(startName) + '+created ' + st.attrib(neiName) ;
+
+          }
+      } else {//for undirected graph
+
+          srcNameR = st.nextName();
+          dstNameR = st.nextName();
+          startNameR = st.nextName();
+          neiNameR = st.nextName();
+          var srcEntryR = new shared SymEntry(srcR);
+          var dstEntryR = new shared SymEntry(dstR);
+          var startEntryR = new shared SymEntry(start_iR);
+          var neiEntryR = new shared SymEntry(neighbourR);
+          st.addEntry(srcNameR, srcEntryR);
+          st.addEntry(dstNameR, dstEntryR);
+          st.addEntry(startNameR, startEntryR);
+          st.addEntry(neiNameR, neiEntryR);
+          if (weighted!=0) {// for weighted graph
+              repMsg =  sNv + '+ ' + sNe + '+ ' + sDirected + ' +' + sWeighted +
+                    '+created ' + st.attrib(srcName)   + '+created ' + st.attrib(dstName) +
+                    '+created ' + st.attrib(startName) + '+created ' + st.attrib(neiName) +
+                    '+created ' + st.attrib(srcNameR)   + '+created ' + st.attrib(dstNameR) +
+                    '+created ' + st.attrib(startNameR) + '+created ' + st.attrib(neiNameR) +
+                    '+created ' + st.attrib(vwName)    + '+created ' + st.attrib(ewName);
+          } else {// for unweighted graph
+              repMsg =  sNv + '+ ' + sNe + '+ ' + sDirected + ' +' + sWeighted +
+                    '+created ' + st.attrib(srcName)   + '+created ' + st.attrib(dstName) +
+                    '+created ' + st.attrib(startName) + '+created ' + st.attrib(neiName) +
+                    '+created ' + st.attrib(srcNameR)   + '+created ' + st.attrib(dstNameR) +
+                    '+created ' + st.attrib(startNameR) + '+created ' + st.attrib(neiNameR) ;
+          }
+
+      }
+      timer.stop();
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$Sorting Edges takes ", timer.elapsed()," $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      smLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+      return new MsgTuple(repMsg, MsgType.NORMAL);
+  }
 
   //proc segrmatgenMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
   proc segrmatgenMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
@@ -2283,6 +2732,8 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
   }
 
 
+
+
   //proc segBFSMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
   proc segBFSMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       var repMsg: string;
@@ -2755,9 +3206,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            if (numu_adj>0) {
                                if (startu_adj>=ld.low && endu_adj<=ld.high) {
                                    forall i in df[startu_adj..endu_adj] with (ref uadj,+ reduce localCnt) {
+                                      if (u<i) {
                                          uadj.add(i);
                                          localCnt+=1;
                                          //writeln("7 Locale=",here.id,  " u=",u, " add local ",i);
+                                      }
                                    }
                                } else {
                                    var tmpuadj: [0..numu_adj-1]int;
@@ -2766,18 +3219,22 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                              agg.copy(a,df[b]);
                                    }
                                    forall i in tmpuadj with (ref uadj,+ reduce remoteCnt) {
+                                      if (u<i) {
                                          uadj.add(i);
                                          remoteCnt+=1;
                                          //writeln("7 Locale=",here.id,  " u=",u, " add remote ",i);
+                                      }
                                    }
                                }
                            }
                            if (numuR_adj>0) {
                                if (startuR_adj>=ldR.low && enduR_adj<=ldR.high) {
                                    forall i in dfR[startuR_adj..enduR_adj] with (ref uadj,+ reduce localCnt) {
+                                      if (u<i) {
                                          uadj.add(i);
                                          localCnt+=1;
                                          // writeln("8 Locale=",here.id,  " u=",u, " add reverse lodal ",i);
+                                      }
                                    }
                                } else {
                                    var tmpuadj: [0..numuR_adj-1]int;
@@ -2786,9 +3243,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                              agg.copy(a,dfR[b]);
                                    }
                                    forall i in tmpuadj with (ref uadj,+ reduce remoteCnt) {
+                                      if (u<i) {
                                          uadj.add(i);
                                          remoteCnt+=1;
                                          //writeln("8 Locale=",here.id,  " u=",u, " add reverse remote ",i);
+                                      }
                                    }
 
                                }
@@ -2797,8 +3256,6 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            //writeln("9 Locale=",here.id, " u=",u," got uadj=",uadj, " numu_adj=", numu_adj," numuR_adj=", numuR_adj);
 
                            forall v in uadj with (+reduce triCount,ref uadj,+ reduce remoteCnt, + reduce localCnt) {
-                             if (u<v ) {
-
                                //writeln("10 Locale=",here.id, " u=",u," and v=",v, " enter forall");
                                var vadj= new set(int,parSafe = true);
                                //var vadj= new set(int);
@@ -2824,9 +3281,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                if (numv_adj>0) {
                                    if (startv_adj>=ld.low && endv_adj<=ld.high) {
                                        forall i in df[startv_adj..endv_adj] with (ref vadj,+ reduce localCnt) {
+                                          if (v<i) {
                                              vadj.add(i);
                                              localCnt+=1;
                                              //writeln("11 Locale=",here.id,  " v=",v, " add local ",i);
+                                          }
                                        }
                                    } else {
                                        var tmpvadj: [0..numv_adj-1]int;
@@ -2835,9 +3294,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                              agg.copy(a,df[b]);
                                        }
                                        forall i in tmpvadj with (ref vadj,+ reduce remoteCnt) {
+                                          if (v<i) {
                                              vadj.add(i);
                                              remoteCnt+=1;
                                              //writeln("11 Locale=",here.id,  " v=",v, " add remote ",i);
+                                          }
                                        }
 
                                    }
@@ -2846,9 +3307,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                if (numvR_adj>0) {
                                    if (startvR_adj>=ldR.low && endvR_adj<=ldR.high) {
                                        forall i in dfR[startvR_adj..endvR_adj] with (ref vadj,+ reduce localCnt) {
+                                          if (v<i) {
                                              vadj.add(i);
                                              localCnt+=1;
                                              //writeln("12 Locale=",here.id,  " v=",v, " add reverse local ",i);
+                                          }
                                        }
                                    } else {
                                        var tmpvadj: [0..numvR_adj-1]int;
@@ -2857,9 +3320,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                                  agg.copy(a,dfR[b]);
                                        }
                                        forall i in tmpvadj with (ref vadj,+reduce remoteCnt) {
+                                          if (v<i) {
                                              vadj.add(i);
                                              remoteCnt+=1;
                                              //writeln("12 Locale=",here.id,  " v=",v, " add reverse remote ",i);
+                                          }
                                        }
 
                                    }
@@ -2878,7 +3343,6 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                }
                                //writeln("31 Locale=",here.id, "tri=", triCount," u=",u, " v=",v);
                                //vadj.clear();
-                             }
                            }// end forall v adj build
                            //uadj.clear();
                        }// end forall u adj build
@@ -2904,7 +3368,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           for i in LocalAccessTimes {
               totalLocal+=i;
           }
-          TotalCnt[0]/=3;
+          //TotalCnt[0]/=3;
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("TriangleNumber=", TotalCnt[0]);
           writeln("LocalRatio=", (totalLocal:real)/((totalRemote+totalLocal):real),", TotalTimes=",totalRemote+totalLocal);
