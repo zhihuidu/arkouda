@@ -583,7 +583,7 @@ class GraphUDW(GraphUD):
                         self.v_weight = create_pdarray(args[12])
                     except Exception as e:
                         raise RuntimeError(e)
-
+        self.dtype = akint
         self.logger = getArkoudaLogger(name=__class__.__name__) # type: ignore
 
 
