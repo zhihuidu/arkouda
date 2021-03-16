@@ -859,9 +859,6 @@ def suffix_array(strings : Strings) -> SArrays:
         args ="{} {} {}".format( strings.objtype,
                                                         strings.offsets.name,
                                                         strings.bytes.name) 
-        msg = "segmentedSuffixAry {} {} {}".format( strings.objtype,
-                                                        strings.offsets.name,
-                                                        strings.bytes.name) 
         repMsg = generic_msg(cmd=cmd,args=args)
         return SArrays(*(cast(str,repMsg).split('+')))
 
@@ -889,11 +886,6 @@ def lcp_array(suffixarrays : SArrays, strings : Strings) -> SArrays:
         """
         cmd = "segmentedLCP"
         args= "{} {} {} {} {}".format( suffixarrays.objtype,
-                                                        suffixarrays.offsets.name,
-                                                        suffixarrays.bytes.name, 
-                                                        strings.offsets.name,
-                                                        strings.bytes.name) 
-        msg = "segmentedLCP {} {} {} {} {}".format( suffixarrays.objtype,
                                                         suffixarrays.offsets.name,
                                                         suffixarrays.bytes.name, 
                                                         strings.offsets.name,
@@ -945,7 +937,6 @@ def suffix_array_file(filename: str)  -> tuple:
         """
         cmd = "segmentedSAFile"
         args= "{}".format( filename )
-        #repMsg = generic_msg(msg)
         repMsg = generic_msg(cmd=cmd,args=args)
         tmpmsg=cast(str,repMsg).split('+')
         sastr=tmpmsg[0:2]

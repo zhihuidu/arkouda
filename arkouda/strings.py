@@ -994,7 +994,6 @@ class SArrays:
                                                                  other.objtype,
                                                                  other.offsets.name,
                                                                  other.bytes.name)
-            msg = "segmentedBinopvvInt {} {} {} {} {} {} {}".format(op,
                                                                  self.objtype,
                                                                  self.offsets.name,
                                                                  self.bytes.name,
@@ -1003,13 +1002,7 @@ class SArrays:
                                                                  other.bytes.name)
         elif resolve_scalar_dtype(other) == 'int':
             cmd = "segmentedBinopvsInt"
-            args = "{} {} {} {} {} {}".format(op,
-                                                              self.objtype,
-                                                              self.offsets.name,
-                                                              self.bytes.name,
-                                                              self.objtype,
-                                                              json.dumps([other]))
-            msg = "segmentedBinopvsInt {} {} {} {} {} {}".format(op,
+            args= "{} {} {} {} {} {}".format(op,
                                                               self.objtype,
                                                               self.offsets.name,
                                                               self.bytes.name,
@@ -1035,16 +1028,11 @@ class SArrays:
                 key += self.size
             if (key >= 0 and key < self.size):
                 cmd = "segmentedIndex"
-                args = "{} {} {} {} {}".format('intIndex',
-                                                             self.objtype,
-                                                             self.offsets.name,
-                                                             self.bytes.name,
-                                                             key)
-                msg = "segmentedIndex {} {} {} {} {}".format('intIndex',
-                                                             self.objtype,
-                                                             self.offsets.name,
-                                                             self.bytes.name,
-                                                             key)
+                args= "{} {} {} {} {}".format("intIndex",
+                                               self.objtype,
+                                               self.offsets.name,
+                                               self.bytes.name,
+                                               key)
                 repMsg = generic_msg(cmd=cmd,args=args)
                 _, value = repMsg.split(maxsplit=1)
                 return _parse_single_int_array_value(value)
@@ -1055,20 +1043,13 @@ class SArrays:
             (start,stop,stride) = key.indices(self.size)
             self.logger.debug('start: {}; stop: {}; stride: {}'.format(start,stop,stride))
             cmd = "segmentedIndex"
-            args = "{} {} {} {} {} {} {}".format('sliceIndex',
-                                                               self.objtype,
-                                                               self.offsets.name,
-                                                               self.bytes.name,
-                                                               start,
-                                                               stop,
-                                                               stride)
-            msg = "segmentedIndex {} {} {} {} {} {} {}".format('sliceIndex',
-                                                               self.objtype,
-                                                               self.offsets.name,
-                                                               self.bytes.name,
-                                                               start,
-                                                               stop,
-                                                               stride)
+            args= "{} {} {} {} {} {} {}".format('sliceIndex',
+                                                 self.objtype,
+                                                 self.offsets.name,
+                                                 self.bytes.name,
+                                                 start,
+                                                 stop,
+                                                 stride)
             repMsg = generic_msg(cmd=cmd,args=args)
             offsets, values = repMsg.split('+')
             return SArrays(offsets, values);
@@ -1079,16 +1060,11 @@ class SArrays:
             if kind == "int" and self.size != key.size:
                 raise ValueError("size mismatch {} {}".format(self.size,key.size))
             cmd = "segmentedIndex"
-            args = "{} {} {} {} {}".format('pdarrayIndex',
-                                                         self.objtype,
-                                                         self.offsets.name,
-                                                         self.bytes.name,
-                                                         key.name)
-            msg = "segmentedIndex {} {} {} {} {}".format('pdarrayIndex',
-                                                         self.objtype,
-                                                         self.offsets.name,
-                                                         self.bytes.name,
-                                                         key.name)
+            args= "{} {} {} {} {}".format('pdarrayIndex',
+                                           self.objtype,
+                                           self.offsets.name,
+                                           self.bytes.name,
+                                           key.name)
             repMsg = generic_msg(cmd=cmd,args=args)
             offsets, values = repMsg.split('+')
             return SArrays(offsets, values)
@@ -1110,9 +1086,7 @@ class SArrays:
             Raised if there is a server-side error thrown
         """
         cmd = "segmentLengths"
-        args= " {} {} {}".\
-                        format(self.objtype, self.offsets.name, self.bytes.name)
-        msg = "segmentLengths {} {} {}".\
+        args= "{} {} {}".\
                         format(self.objtype, self.offsets.name, self.bytes.name)
         repMsg = generic_msg(cmd=cmd,args=args)
         return create_pdarray(cast(str,repMsg))

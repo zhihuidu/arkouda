@@ -348,6 +348,8 @@ proc main() {
                 when "segmentedGraphBFS" {repTuple = segBFSMsg(cmd, args, st);}
                 when "segmentedIn1dInt"  {repTuple = segIn1dIntMsg(cmd, args, st);}
                 when "segmentedGraphTri" {repTuple = segTriMsg(cmd, args, st);}
+                when "segmentedBinopvvInt"  {repTuple = segBinopvvIntMsg(cmd, args, st);}
+                when "segmentedBinopvsInt"  {repTuple = segBinopvsIntMsg(cmd, args, st);}
 
 
 
