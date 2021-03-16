@@ -1276,7 +1276,7 @@ def graph_dfs (graph: Union[GraphD,GraphUD,GraphDW,GraphUDW], root: int ) -> tup
         vertexary=create_pdarray(*(cast(str,vertexstr)) )
         return (levelary,vertexary)
 
-
+'''
 @typechecked
 def components (graph:  Union[GraphD,GraphUD,GraphDW,GraphUDW] ) -> int :
         """
@@ -1301,3 +1301,4 @@ def components (graph:  Union[GraphD,GraphUD,GraphDW,GraphUDW] ) -> int :
         msg = "segmentedGraphComponents {} {}".format(graph.edges.name,graph.vertices.name)
         repMsg = generic_msg(cmd=cmd,args=args)
         return cast(int,repMsg)
+'''
