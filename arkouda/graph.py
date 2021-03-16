@@ -12,10 +12,29 @@ from arkouda.dtypes import NUMBER_FORMAT_STRINGS, resolve_scalar_dtype, \
      translate_np_dtype
 import json
 
-__all__ = ['GraphD','GraphDW','GraphUD','GraphUDW']
+__all__ = ['Graph','GraphD','GraphDW','GraphUD','GraphUDW']
 
-'''
 class Vertex:
+    """
+    Represents a vertex of a graph
+
+    Attributes
+    ----------
+    vertex_id : int
+        The unique identification of the vertex in a graph
+    weight : int
+        The weitht information of the current vertex
+    neighbors  : pdarray
+        all the vertices connected to the current vertex. For directed graph, out edge vertices are given.
+    logger : ArkoudaLogger
+        Used for all logging operations
+
+    Notes
+    -----
+    Vertex is composed of one pdarray: the ID value array which 
+    contains the all the ids of the adjacency vertices.
+    """
+    # based on args 
     def __init__(self, *args) -> None: 
         
         try:
@@ -52,6 +71,25 @@ class Vertex:
 
 
 class Edge:
+    """
+    Represents an Edge of a graph
+
+    Attributes
+    ----------
+    vertex_pair : tuple
+        The unique identification of the edge in a graph
+    weight : int
+        The weitht information of the current edge
+    adjacency  : pdarray
+        all the vertices connected to the current vertex. For directed graph, out edge vertices are given.
+    logger : ArkoudaLogger
+        Used for all logging operations
+
+    Notes
+    -----
+    Vertex is composed of one pdarray: the ID value array which 
+    contains the all the ids of the adjacency vertices.
+    """
     # based on args 
     def __init__(self, *args) -> None:
         try:
@@ -80,7 +118,7 @@ class Edge:
 
     def __repr__(self) -> str:
         return "{}".format(self.__str__())
-'''
+
 
 class GraphD:
     """
@@ -214,8 +252,7 @@ class GraphD:
         print()
     '''
 
-#class GraphDW(GraphD):
-class GraphDW:
+class GraphDW(GraphD):
     """
     This is an array based graph representation. The graph data resides on the
     arkouda server. The user should not call this class directly;
@@ -281,12 +318,8 @@ class GraphDW:
             Raised if there's an error in generating instance attributes 
             from either the offset_attrib or bytes_attrib parameter 
         """
-        #super().__init__(*args)
+        super().__init__(*args)
         try:
-            self.n_vertices=cast(int,args[0])
-            self.n_edges=cast(int,args[1])
-            self.directed=cast(int,args[2])
-            self.weighted=cast(int,args[3])
             if len(args) > 9:
                 if isinstance(args[9],pdarray):
                      self.e_weight=args[9]
@@ -303,38 +336,12 @@ class GraphDW:
                         self.v_weight = create_pdarray(args[8])
                     except Exception as e:
                         raise RuntimeError(e)
-            if len(args) == 7:
-                raise ValueError
-            if len(args) > 7:
-                if (isinstance(args[7],pdarray) and isinstance(args[6],pdarray)) :
-                     self.start_i=args[6]
-                     self.neighbour=args[7]
-                else:
-                    try:
-                        self.start_i = create_pdarray(args[6])
-                        self.neighbour = create_pdarray(args[7])
-                    except Exception as e:
-                        raise RuntimeError(e)
-            if len(args) == 5:
-                raise ValueError
-            if len(args) > 5:
-                if (isinstance(args[5],pdarray) and isinstance(args[4],pdarray)) :
-                     self.src=args[4]
-                     self.dst=args[5]
-                else:
-                    try:
-                        self.src = create_pdarray(args[4])
-                        self.dst = create_pdarray(args[5])
-                    except Exception as e:
-                        raise RuntimeError(e)
         except Exception as e:
             raise RuntimeError(e)
-        self.dtype = akint
-        self.logger = getArkoudaLogger(name=__class__.__name__) # type: ignore
 
 
-#class GraphUD(GraphD):
-class GraphUD:
+
+class GraphUD(GraphD):
     """
     This is an array based graph representation. The graph data resides on the
     arkouda server. The user should not call this class directly;
@@ -404,12 +411,8 @@ class GraphUD:
         RuntimeError
         ValueError
         """
-        #super().__init__(*args)
+        super().__init__(*args)
         try:
-            self.n_vertices=cast(int,args[0])
-            self.n_edges=cast(int,args[1])
-            self.directed=cast(int,args[2])
-            self.weighted=cast(int,args[3])
             if len(args) > 11:
                 if (isinstance(args[11],pdarray) and isinstance(args[10],pdarray)) :
                      self.start_iR=args[10]
@@ -430,38 +433,11 @@ class GraphUD:
                         self.dstR = create_pdarray(args[9])
                     except Exception as e:
                         raise RuntimeError(e)
-            if len(args) == 7:
-                raise ValueError
-            if len(args) > 7:
-                if (isinstance(args[7],pdarray) and isinstance(args[6],pdarray)) :
-                     self.start_i=args[6]
-                     self.neighbour=args[7]
-                else:
-                    try:
-                        self.start_i = create_pdarray(args[6])
-                        self.neighbour = create_pdarray(args[7])
-                    except Exception as e:
-                        raise RuntimeError(e)
-            if len(args) == 5:
-                raise ValueError
-            if len(args) > 5:
-                if (isinstance(args[5],pdarray) and isinstance(args[4],pdarray)) :
-                     self.src=args[4]
-                     self.dst=args[5]
-                else:
-                    try:
-                        self.src = create_pdarray(args[4])
-                        self.dst = create_pdarray(args[5])
-                    except Exception as e:
-                        raise RuntimeError(e)
         except Exception as e:
             raise RuntimeError(e)
-        self.dtype = akint
-        self.logger = getArkoudaLogger(name=__class__.__name__) # type: ignore
 
 
-#class GraphUDW(GraphUD):
-class GraphUDW:
+class GraphUDW(GraphUD):
     """
     This is an array based graph representation. The graph data resides on the
     arkouda server. The user should not call this class directly;
@@ -530,12 +506,8 @@ class GraphUDW:
         RuntimeError
         ValueError
         """
-        #super().__init__(*args)
+        super().__init__(*args)
         try:
-            self.n_vertices=cast(int,args[0])
-            self.n_edges=cast(int,args[1])
-            self.directed=cast(int,args[2])
-            self.weighted=cast(int,args[3])
             if len(args) > 13:
                 if isinstance(args[13],pdarray):
                      self.e_weight=args[13]
@@ -552,54 +524,9 @@ class GraphUDW:
                         self.v_weight = create_pdarray(args[12])
                     except Exception as e:
                         raise RuntimeError(e)
-            if len(args) > 11:
-                if (isinstance(args[11],pdarray) and isinstance(args[10],pdarray)) :
-                     self.start_iR=args[10]
-                     self.neighbourR=args[11]
-                else:
-                    try:
-                        self.start_iR = create_pdarray(args[10])
-                        self.neighbourR = create_pdarray(args[11])
-                    except Exception as e:
-                        raise RuntimeError(e)
-            if len(args) > 9:
-                if (isinstance(args[9],pdarray) and isinstance(args[8],pdarray)) :
-                     self.srcR=args[8]
-                     self.dstR=args[9]
-                else:
-                    try:
-                        self.srcR = create_pdarray(args[8])
-                        self.dstR = create_pdarray(args[9])
-                    except Exception as e:
-                        raise RuntimeError(e)
-            if len(args) == 7:
-                raise ValueError
-            if len(args) > 7:
-                if (isinstance(args[7],pdarray) and isinstance(args[6],pdarray)) :
-                     self.start_i=args[6]
-                     self.neighbour=args[7]
-                else:
-                    try:
-                        self.start_i = create_pdarray(args[6])
-                        self.neighbour = create_pdarray(args[7])
-                    except Exception as e:
-                        raise RuntimeError(e)
-            if len(args) == 5:
-                raise ValueError
-            if len(args) > 5:
-                if (isinstance(args[5],pdarray) and isinstance(args[4],pdarray)) :
-                     self.src=args[4]
-                     self.dst=args[5]
-                else:
-                    try:
-                        self.src = create_pdarray(args[4])
-                        self.dst = create_pdarray(args[5])
-                    except Exception as e:
-                        raise RuntimeError(e)
         except Exception as e:
             raise RuntimeError(e)
-        self.dtype = akint
-        self.logger = getArkoudaLogger(name=__class__.__name__) # type: ignore
+
 
 class Graph:
     """
