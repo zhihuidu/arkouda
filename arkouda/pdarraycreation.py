@@ -1244,26 +1244,9 @@ def graph_triangle (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW]) -> pdarray:
         return create_pdarray(repMsg)
         #return (levelary,vertexary)
 
+'''
 @typechecked
 def graph_dfs (graph: Union[GraphD,GraphUD,GraphDW,GraphUDW], root: int ) -> tuple:
-        """
-        This function is generating the depth-first search vertices sequences in given graph
-        starting from the given root vertex
-        Returns
-        -------
-        pdarray
-            The dfs vertices results
-
-        See Also
-        --------
-
-        Notes
-        -----
-        
-        Raises
-        ------  
-        RuntimeError
-        """
         msg = "segmentedGraphDFS {} {} {} {} {} {} {} {}".format(graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.src.name,graph.dst.name,\
                  graph.start_i.name,graph.neighbour.name,root)
@@ -1276,7 +1259,6 @@ def graph_dfs (graph: Union[GraphD,GraphUD,GraphDW,GraphUDW], root: int ) -> tup
         vertexary=create_pdarray(*(cast(str,vertexstr)) )
         return (levelary,vertexary)
 
-'''
 @typechecked
 def components (graph:  Union[GraphD,GraphUD,GraphDW,GraphUDW] ) -> int :
         """
