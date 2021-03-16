@@ -988,26 +988,26 @@ class SArrays:
                                  format(self.size, other.size))
             cmd="segmentedBinopvvInt"
             args= "{} {} {} {} {} {} {}".format(op,
-                                                                 self.objtype,
-                                                                 self.offsets.name,
-                                                                 self.bytes.name,
-                                                                 other.objtype,
-                                                                 other.offsets.name,
-                                                                 other.bytes.name)
-                                                                 self.objtype,
-                                                                 self.offsets.name,
-                                                                 self.bytes.name,
-                                                                 other.objtype,
-                                                                 other.offsets.name,
-                                                                 other.bytes.name)
+                                                self.objtype,
+                                                self.offsets.name,
+                                                self.bytes.name,
+                                                other.objtype,
+                                                other.offsets.name,
+                                                other.bytes.name)
+                                                self.objtype,
+                                                self.offsets.name,
+                                                self.bytes.name,
+                                                other.objtype,
+                                                other.offsets.name,
+                                                other.bytes.name)
         elif resolve_scalar_dtype(other) == 'int':
             cmd = "segmentedBinopvsInt"
             args= "{} {} {} {} {} {}".format(op,
-                                                              self.objtype,
-                                                              self.offsets.name,
-                                                              self.bytes.name,
-                                                              self.objtype,
-                                                              json.dumps([other]))
+                                             self.objtype,
+                                             self.offsets.name,
+                                             self.bytes.name,
+                                             self.objtype,
+                                             json.dumps([other]))
         else:
             raise ValueError("SArrays: {} not supported between SArrays and {}"\
                              .format(op, other.__class__.__name__))
