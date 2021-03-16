@@ -994,12 +994,6 @@ class SArrays:
                                                 other.objtype,
                                                 other.offsets.name,
                                                 other.bytes.name)
-                                                self.objtype,
-                                                self.offsets.name,
-                                                self.bytes.name,
-                                                other.objtype,
-                                                other.offsets.name,
-                                                other.bytes.name)
         elif resolve_scalar_dtype(other) == 'int':
             cmd = "segmentedBinopvsInt"
             args= "{} {} {} {} {} {}".format(op,
