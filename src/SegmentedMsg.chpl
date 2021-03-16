@@ -1772,12 +1772,12 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
 // directly read a stream from given file and build the SegGraph class in memory
   proc segStreamFileMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
-      var (NeS,NvS,ColS,DirectedS, FileName) = payload.splitMsgToTuple(5);
+      var (NeS,NvS,ColS,DirectedS, FileName,FactorS) = payload.splitMsgToTuple(6);
       //writeln("======================Graph Reading=====================");
       //writeln(NeS,NvS,ColS,DirectedS, FileName);
       var Ne=NeS:int;
       var Nv=NvS:int;
-      var Factor=4:int;
+      var Factor=FactorS:int;
       var StreamNe=Ne/Factor:int;
       var StreamNv=Nv/Factor:int;
       var NumCol=ColS:int;

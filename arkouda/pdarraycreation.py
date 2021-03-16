@@ -1001,7 +1001,8 @@ def graph_file_read(Ne:int, Nv:int,Ncol:int,directed:int, filename: str)  -> Uni
 
 
 @typechecked
-def stream_file_read(Ne:int, Nv:int,Ncol:int,directed:int, filename: str)  -> Union[GraphD,GraphUD,GraphDW,GraphUDW]:
+def stream_file_read(Ne:int, Nv:int,Ncol:int,directed:int, filename: str,\
+                     factor:int)  -> Union[GraphD,GraphUD,GraphDW,GraphUDW]:
         """
         This function is used for creating a graph from a file.
         The file should like this
@@ -1032,7 +1033,7 @@ def stream_file_read(Ne:int, Nv:int,Ncol:int,directed:int, filename: str)  -> Un
         RuntimeError
         """
         cmd = "segmentedStreamFile"
-        args="{} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename);
+        args="{} {} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename,factor);
         #repMsg = generic_msg(msg)
         repMsg = generic_msg(cmd=cmd,args=args)
         if (int(Ncol) >2) :
