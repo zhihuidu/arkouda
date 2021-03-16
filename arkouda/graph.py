@@ -214,7 +214,8 @@ class GraphD:
         print()
     '''
 
-class GraphDW(GraphD):
+#class GraphDW(GraphD):
+class GraphDW:
     """
     This is an array based graph representation. The graph data resides on the
     arkouda server. The user should not call this class directly;
@@ -280,7 +281,7 @@ class GraphDW(GraphD):
             Raised if there's an error in generating instance attributes 
             from either the offset_attrib or bytes_attrib parameter 
         """
-        super().__init__(*args)
+        #super().__init__(*args)
         try:
             self.n_vertices=cast(int,args[0])
             self.n_edges=cast(int,args[1])
@@ -332,7 +333,8 @@ class GraphDW(GraphD):
         self.logger = getArkoudaLogger(name=__class__.__name__) # type: ignore
 
 
-class GraphUD(GraphD):
+#class GraphUD(GraphD):
+class GraphUD:
     """
     This is an array based graph representation. The graph data resides on the
     arkouda server. The user should not call this class directly;
@@ -402,7 +404,7 @@ class GraphUD(GraphD):
         RuntimeError
         ValueError
         """
-        super().__init__(*args)
+        #super().__init__(*args)
         try:
             self.n_vertices=cast(int,args[0])
             self.n_edges=cast(int,args[1])
@@ -458,7 +460,8 @@ class GraphUD(GraphD):
         self.logger = getArkoudaLogger(name=__class__.__name__) # type: ignore
 
 
-class GraphUDW(GraphUD):
+#class GraphUDW(GraphUD):
+class GraphUDW:
     """
     This is an array based graph representation. The graph data resides on the
     arkouda server. The user should not call this class directly;
@@ -527,7 +530,7 @@ class GraphUDW(GraphUD):
         RuntimeError
         ValueError
         """
-        super().__init__(*args)
+        #super().__init__(*args)
         try:
             self.n_vertices=cast(int,args[0])
             self.n_edges=cast(int,args[1])
