@@ -12,29 +12,10 @@ from arkouda.dtypes import NUMBER_FORMAT_STRINGS, resolve_scalar_dtype, \
      translate_np_dtype
 import json
 
-__all__ = ['Graph','GraphD','GraphDW','GraphUD','GraphUDW']
+__all__ = ['GraphD','GraphDW','GraphUD','GraphUDW']
 
+'''
 class Vertex:
-    """
-    Represents a vertex of a graph
-
-    Attributes
-    ----------
-    vertex_id : int
-        The unique identification of the vertex in a graph
-    weight : int
-        The weitht information of the current vertex
-    neighbors  : pdarray
-        all the vertices connected to the current vertex. For directed graph, out edge vertices are given.
-    logger : ArkoudaLogger
-        Used for all logging operations
-
-    Notes
-    -----
-    Vertex is composed of one pdarray: the ID value array which 
-    contains the all the ids of the adjacency vertices.
-    """
-    # based on args 
     def __init__(self, *args) -> None: 
         
         try:
@@ -71,25 +52,6 @@ class Vertex:
 
 
 class Edge:
-    """
-    Represents an Edge of a graph
-
-    Attributes
-    ----------
-    vertex_pair : tuple
-        The unique identification of the edge in a graph
-    weight : int
-        The weitht information of the current edge
-    adjacency  : pdarray
-        all the vertices connected to the current vertex. For directed graph, out edge vertices are given.
-    logger : ArkoudaLogger
-        Used for all logging operations
-
-    Notes
-    -----
-    Vertex is composed of one pdarray: the ID value array which 
-    contains the all the ids of the adjacency vertices.
-    """
     # based on args 
     def __init__(self, *args) -> None:
         try:
@@ -118,7 +80,7 @@ class Edge:
 
     def __repr__(self) -> str:
         return "{}".format(self.__str__())
-
+'''
 
 class GraphD:
     """
@@ -635,7 +597,6 @@ class GraphUDW(GraphUD):
             raise RuntimeError(e)
         self.dtype = akint
         self.logger = getArkoudaLogger(name=__class__.__name__) # type: ignore
-
 
 class Graph:
     """
