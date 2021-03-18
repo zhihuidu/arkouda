@@ -1817,6 +1817,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       proc readLinebyLine() throws {
            coforall loc in Locales  {
               on loc {
+                  var randv = new RandomStream(real, here.id, false);
                   var f = open(FileName, iomode.r);
                   var r = f.reader(kind=ionative);
                   var line:string;
@@ -1837,8 +1838,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                             }
                       }
                       if srclocal.contains(Streamcurline) {
-                          src[Streamcurline]=(a:int)%StreamNv;
-                          dst[Streamcurline]=(b:int)%StreamNv;
+                          if ((line<StreamNe) || (randv.getNext()>0.5) ) {
+                              src[Streamcurline]=(a:int)%StreamNv;
+                              dst[Streamcurline]=(b:int)%StreamNv;
+                          }
                       }
                       curline+=1;
                       Streamcurline=curline%StreamNe;
