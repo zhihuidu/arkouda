@@ -1838,7 +1838,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                             }
                       }
                       if srclocal.contains(Streamcurline) {
-                          if ((curline<StreamNe) || (randv.getNext()>0.5) ) {
+                          if ((curline<StreamNe) || (randv.getNext()< 1.0/Factor:real) ) {
                               src[Streamcurline]=(a:int) % StreamNv;
                               dst[Streamcurline]=(b:int) % StreamNv;
                           }
