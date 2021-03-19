@@ -6,7 +6,7 @@ from arkouda.pdarrayclass import pdarray, create_pdarray
 #, parse_single_value,_parse_single_int_array_value
 from arkouda.logger import getArkoudaLogger
 import numpy as np # type: ignore
-from arkouda.dtypes import str as akstr
+from arkouda.dtypes import npstr as akstr
 from arkouda.dtypes import int64 as akint
 from arkouda.dtypes import NUMBER_FORMAT_STRINGS, resolve_scalar_dtype, \
      translate_np_dtype

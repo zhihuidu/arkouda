@@ -11,7 +11,7 @@ from arkouda.dtypes import NUMBER_FORMAT_STRINGS, resolve_scalar_dtype, \
 import json
 
 from arkouda.pdarrayclass import _parse_single_int_array_value
-from arkouda.dtypes import str as akstr
+from arkouda.dtypes import npstr as akstr
 from arkouda.dtypes import int64 as akint
 
 

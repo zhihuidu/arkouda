@@ -4101,10 +4101,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                       localcnt+=1;
                                    }
                                }
-                               writeln("3333 Locale=",here.id, " tri=", localcnt," u=",u, " v=",v, " u_cnt=", v_cnt[u], " v_cnt=", v_cnt[v], " ratio=", (localcnt*1.0)/(v_cnt[u]+v_cnt[v]):real);
+                               writeln("3333 Locale=",here.id, " tri=", localcnt," u=",u, " v=",v, " u_cnt=", v_cnt[u], " v_cnt=", v_cnt[v], " ratio=", (v_cnt[u]+v_cnt[v]):real/localcnt:real);
                                if (localcnt>0) {
                                    number_edge+=1;
-                                   sum_ratio+=(localcnt*1.0)/(v_cnt[u]+v_cnt[v]):real;
+                                   sum_ratio+=(v_cnt[u]+v_cnt[v]):real/localcnt:real;
                                }
                                //writeln("31 Locale=",here.id, "tri=", triCount," u=",u, " v=",v);
                                //vadj.clear();
