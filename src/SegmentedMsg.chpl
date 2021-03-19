@@ -3887,7 +3887,9 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       }
       proc stream_tri_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
                         neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int):string throws{
-          coforall loc in Locales   {
+          var number_edge:int;
+          var sum_ratio:real;
+          coforall loc in Locales with (+ reduce number_edge, + reduce sum_ratio)  {
                    on loc {
                        var triCount=0:int;
                        var remoteCnt=0:int;
@@ -3935,7 +3937,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        }
 
                        //writeln("3 Locale=",here.id, " Updated Starting/End Vertex=[",startVer, ",", endVer, "], StarAry=", StartVerAry, " EndAry=", EndVerAry);
-                       forall u in startVer..endVer with (+ reduce triCount,+ reduce remoteCnt, + reduce localCnt) {// for all the u
+                       forall u in startVer..endVer with (+ reduce triCount,+ reduce remoteCnt, + reduce localCnt,+ reduce number_edge, + reduce sum_ratio) {// for all the u
                            //writeln("4 Locale=",here.id, " u=",u, " Enter coforall path");
                            var uadj= new set(int,parSafe = true);
                            //var uadj= new set(int);
@@ -4011,7 +4013,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            }// end of building uadj 
                            //writeln("9 Locale=",here.id, " u=",u," got uadj=",uadj, " numu_adj=", numu_adj," numuR_adj=", numuR_adj);
 
-                           forall v in uadj with (+reduce triCount,ref uadj,+ reduce remoteCnt, + reduce localCnt) {
+                           forall v in uadj with (+reduce triCount,ref uadj,+ reduce remoteCnt, + reduce localCnt,+ reduce number_edge, + reduce sum_ratio) {
                                //writeln("10 Locale=",here.id, " u=",u," and v=",v, " enter forall");
                                var vadj= new set(int,parSafe = true);
                                //var vadj= new set(int);
@@ -4099,7 +4101,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                       localcnt+=1;
                                    }
                                }
-                               writeln("3333 Locale=",here.id, "tri=", localcnt," u=",u, " v=",v, "u_cnt=", v_cnt[u], " v_cnt=", v_cnt[v], " ratio=", (localcnt*1.0)/(v_cnt[u]+v_cnt[v]):real);
+                               writeln("3333 Locale=",here.id, " tri=", localcnt," u=",u, " v=",v, " u_cnt=", v_cnt[u], " v_cnt=", v_cnt[v], " ratio=", (localcnt*1.0)/(v_cnt[u]+v_cnt[v]):real);
+                               if (localcnt>0) {
+                                   number_edge+=1;
+                                   sum_ratio+=(localcnt*1.0)/(v_cnt[u]+v_cnt[v]):real);
+                               }
                                //writeln("31 Locale=",here.id, "tri=", triCount," u=",u, " v=",v);
                                //vadj.clear();
                            }// end forall v adj build
@@ -4111,6 +4117,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        //writeln("100 Locale=",here.id, " subTriSum=", subTriSum);
                    }//end on loc
           }//end coforall loc
+          writeln("the average ratio is", sum_ratio/number_edge);
           return "success";
       }//end of stream_tri_kernel_u
 
@@ -4150,7 +4157,6 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       
       timer.stop();
       writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
-      writeln("Streaming Triangle Counting time=");
       writeln("$$$$$$$$$$$$ Streaming Triangle Counting time= ", timer.elapsed()," $$$$$$$$$$$$$$$$$$$$$$$");
       writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
       smLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
