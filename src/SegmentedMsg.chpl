@@ -3494,7 +3494,669 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
 
 
+// directly read a stream from given file and build the SegGraph class in memory
+  proc segStreamTriCntMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+      var (NeS,NvS,ColS,DirectedS, FileName,FactorS) = payload.splitMsgToTuple(6);
+      //writeln("======================Graph Reading=====================");
+      //writeln(NeS,NvS,ColS,DirectedS, FileName);
+      var Ne=NeS:int;
+      var Nv=NvS:int;
+      var Factor=FactorS:int;
+      var StreamNe=Ne/Factor:int;
+      var StreamNv=Nv/Factor:int;
+      var NumCol=ColS:int;
+      var directed=DirectedS:int;
+      var weighted=0:int;
+      var timer: Timer;
+      if NumCol>2 {
+           weighted=1;
+      }
 
+      timer.start();
+      var src=makeDistArray(StreamNe,int);
+      var dst=makeDistArray(StreamNe,int);
+      //var length=makeDistArray(StreamNv,int);
+      var neighbour=makeDistArray(StreamNv,int);
+      var start_i=makeDistArray(StreamNv,int);
+
+      var e_weight = makeDistArray(StreamNe,int);
+      var e_cnt = makeDistArray(StreamNe,int);
+      var v_weight = makeDistArray(StreamNv,int);
+      var v_cnt = makeDistArray(StreamNv,int);
+
+      var iv=makeDistArray(StreamNe,int);
+
+      var srcR=makeDistArray(StreamNe,int);
+      var dstR=makeDistArray(StreamNe,int);
+      var neighbourR=makeDistArray(StreamNv,int);
+      var start_iR=makeDistArray(StreamNv,int);
+      ref  ivR=iv;
+
+      var linenum=0:int;
+
+      var repMsg: string;
+
+      var startpos, endpos:int;
+      var sort:int;
+      var filesize:int;
+
+      var TotalCnt=0:[0..0] int;
+      var subTriSum=0: [0..numLocales-1] int;
+      var StartVerAry=-1: [0..numLocales-1] int;
+      var EndVerAry=-1: [0..numLocales-1] int;
+      var RemoteAccessTimes=0: [0..numLocales-1] int;
+      var LocalAccessTimes=0: [0..numLocales-1] int;
+
+
+
+      proc readLinebyLine() throws {
+           coforall loc in Locales  {
+              on loc {
+                  var randv = new RandomStream(real, here.id, false);
+                  var f = open(FileName, iomode.r);
+                  var r = f.reader(kind=ionative);
+                  var line:string;
+                  var a,b,c:string;
+                  var curline=0:int;
+                  var Streamcurline=0:int;
+                  var srclocal=src.localSubdomain();
+                  var neilocal=neighbour.localSubdomain();
+                  var ewlocal=e_weight.localSubdomain();
+                  forall i in srclocal {
+                        src[i]=-1;
+                        dst[i]=-1;
+                        srcR[i]=-1;
+                        dstR[i]=-1;
+                        e_weight[i]=0;
+                        e_cnt[i]=0;
+                  }
+                  forall i in neilocal {
+                        neighbour[i]=0;
+                        neighbourR[i]=0;
+                        v_weight[i]=0;
+                        v_cnt[i]=0;
+                        start_i[i]=-1;
+                        start_iR[i]=-1;
+                  }
+
+                  while r.readline(line) {
+                      if NumCol==2 {
+                           (a,b)=  line.splitMsgToTuple(2);
+                      } else {
+                           (a,b,c)=  line.splitMsgToTuple(3);
+                            //if ewlocal.contains(Streamcurline){
+                            //    e_weight[Streamcurline]=c:int;
+                            //}
+                      }
+                      var a_hash=(a:int) % StreamNv;
+                      var b_hash=(b:int) % StreamNv;
+                      if srclocal.contains(Streamcurline) {
+                          if ((curline<StreamNe) || (randv.getNext()>= 1.0/Factor:real) ) {
+                              src[Streamcurline]=a_hash;
+                              dst[Streamcurline]=b_hash;
+                              e_cnt[Streamcurline]+=1;
+                          }
+                      }
+                      if neilocal.contains(a_hash) {
+                          v_cnt[a_hash]+=1;
+                      }
+                      if neilocal.contains(b_hash) {
+                          v_cnt[b_hash]+=1;
+                      }
+                      curline+=1;
+                      Streamcurline=curline%StreamNe;
+                  } 
+                  forall i in src.localSubdomain() {
+                       src[i]=src[i]+(src[i]==dst[i]);
+                       src[i]=src[i]%StreamNv;
+                       dst[i]=dst[i]%StreamNv;
+                  }
+                  r.close();
+                  f.close();
+               }// end on loc
+           }//end coforall
+      }//end readLinebyLine
+      
+      readLinebyLine();
+      //start_i=-1;
+      //start_iR=-1;
+      timer.stop();
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$ Reading File takes ", timer.elapsed()," $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      timer.start();
+
+      proc combine_sort() throws {
+             param bitsPerDigit = RSLSD_bitsPerDigit;
+             var bitWidths: [0..1] int;
+             var negs: [0..1] bool;
+             var totalDigits: int;
+             var size=StreamNe: int;
+             for (bitWidth, ary, neg) in zip(bitWidths, [src,dst], negs) {
+                       (bitWidth, neg) = getBitWidth(ary); 
+                       totalDigits += (bitWidth + (bitsPerDigit-1)) / bitsPerDigit;
+             }
+             proc mergedArgsort(param numDigits) throws {
+                    //overMemLimit(((4 + 3) * size * (numDigits * bitsPerDigit / 8))
+                    //             + (2 * here.maxTaskPar * numLocales * 2**16 * 8));
+                    var merged = makeDistArray(size, numDigits*uint(bitsPerDigit));
+                    var curDigit = numDigits - totalDigits;
+                    for (ary , nBits, neg) in zip([src,dst], bitWidths, negs) {
+                        proc mergeArray(type t) {
+                            ref A = ary;
+                            const r = 0..#nBits by bitsPerDigit;
+                            for rshift in r {
+                                 const myDigit = (r.high - rshift) / bitsPerDigit;
+                                 const last = myDigit == 0;
+                                 forall (m, a) in zip(merged, A) {
+                                     m[curDigit+myDigit] =  getDigit(a, rshift, last, neg):uint(bitsPerDigit);
+                                 }
+                            }
+                            curDigit += r.size;
+                        }
+                        mergeArray(int); 
+                    }
+                    var tmpiv = argsortDefault(merged);
+                    return tmpiv;
+             }
+
+             try {
+                 if totalDigits <=  4 { 
+                      iv = mergedArgsort( 4); 
+                 }
+                 if (totalDigits >  4) && ( totalDigits <=  8) { 
+                      iv =  mergedArgsort( 8); 
+                 }
+                 if (totalDigits >  8) && ( totalDigits <=  16) { 
+                      iv = mergedArgsort(16); 
+                 }
+                 if (totalDigits >  16) && ( totalDigits <=  32) { 
+                      iv = mergedArgsort(32); 
+                 }
+                 if (totalDigits >32) {    
+                      return "Error, TotalDigits >32";
+                 }
+
+             } catch e: Error {
+                  smLogger.error(getModuleName(),getRoutineName(),getLineNumber(),
+                      e.message());
+                    return "Error: %t".format(e.message());
+             }
+             var tmpedges=src[iv];
+             src=tmpedges;
+             tmpedges=dst[iv];
+             dst=tmpedges;
+             tmpedges=e_cnt[iv];
+             e_cnt=tmpedges;
+
+             return "success";
+      }//end combine_sort
+
+      proc set_neighbour(){ 
+          coforall loc in Locales  {
+              on loc {
+                       ref srcf=src;
+                       ref df=dst;
+                       ref nf=neighbour;
+                       ref sf=start_i;
+                       var ld=srcf.localSubdomain();
+                       // first we divide vertices based on the number of edges
+                       var startVer=srcf[ld.low];
+                       var endVer=srcf[ld.high];
+
+                       StartVerAry[here.id]=startVer;
+                       EndVerAry[here.id]=endVer;
+                       var startEdge=ld.low;
+                       var endEdge=ld.high;
+
+                       forall i in startEdge..endEdge {
+                          var srci=src[i];
+                          if ((srci>=startVer) && (srci<=endVer)) {
+                              neighbour[srci]+=1;
+                             
+                          } else {
+                              var tmpn:int;
+                              var tmpstart:int;
+                              var aggs= newSrcAggregator(int);
+                              aggs.copy(tmpn,neighbour[srci]);
+                              aggs.flush();
+                              tmpn+=1;
+                              var aggd= newDstAggregator(int);
+                              aggd.copy(neighbour[srci],tmpn);
+                              aggd.flush();
+                          }
+
+                       }
+
+              }
+          }
+          for i in 0..StreamNe-1 do {
+             if (start_i[src[i]] ==-1){
+                 start_i[src[i]]=i;
+             }
+          }
+      }
+
+      combine_sort();
+      set_neighbour();
+
+      if (directed==0) { //undirected graph
+
+          proc combine_sortR() throws {
+             /* we cannot use the coargsort version because it will break the memory limit */
+             param bitsPerDigit = RSLSD_bitsPerDigit;
+             var bitWidths: [0..1] int;
+             var negs: [0..1] bool;
+             var totalDigits: int;
+             var size=StreamNe: int;
+             for (bitWidth, ary, neg) in zip(bitWidths, [srcR,dstR], negs) {
+                 (bitWidth, neg) = getBitWidth(ary); 
+                 totalDigits += (bitWidth + (bitsPerDigit-1)) / bitsPerDigit;
+
+             }
+             proc mergedArgsort(param numDigits) throws {
+               //overMemLimit(((4 + 3) * size * (numDigits * bitsPerDigit / 8))
+               //          + (2 * here.maxTaskPar * numLocales * 2**16 * 8));
+               var merged = makeDistArray(size, numDigits*uint(bitsPerDigit));
+               var curDigit = numDigits - totalDigits;
+               for (ary , nBits, neg) in zip([srcR,dstR], bitWidths, negs) {
+                  proc mergeArray(type t) {
+                     ref A = ary;
+                     const r = 0..#nBits by bitsPerDigit;
+                     for rshift in r {
+                        const myDigit = (r.high - rshift) / bitsPerDigit;
+                        const last = myDigit == 0;
+                        forall (m, a) in zip(merged, A) {
+                             m[curDigit+myDigit] =  getDigit(a, rshift, last, neg):uint(bitsPerDigit);
+                        }
+                     }
+                     curDigit += r.size;
+                  }
+                  mergeArray(int); 
+               }
+               var tmpiv = argsortDefault(merged);
+               return tmpiv;
+             } 
+
+             try {
+                 if totalDigits <=  4 { 
+                      ivR = mergedArgsort( 4); 
+                 }
+                 if (totalDigits >  4) && ( totalDigits <=  8) { 
+                      ivR =  mergedArgsort( 8); 
+                 }
+                 if (totalDigits >  8) && ( totalDigits <=  16) { 
+                      ivR = mergedArgsort(16); 
+                 }
+                 if (totalDigits >  16) && ( totalDigits <=  32) { 
+                      ivR = mergedArgsort(32); 
+                 }
+             } catch e: Error {
+                  smLogger.error(getModuleName(),getRoutineName(),getLineNumber(),
+                      e.message());
+                    return "Error: %t".format(e.message());
+             }
+
+             var tmpedges = srcR[ivR]; 
+             srcR=tmpedges;
+             tmpedges = dstR[ivR]; 
+             dstR=tmpedges;
+             return "success";
+
+          }// end combine_sortR
+
+
+          proc set_neighbourR(){ 
+              coforall loc in Locales  {
+                  on loc {
+                       ref srcfR=srcR;
+                       ref nfR=neighbourR;
+                       ref sfR=start_iR;
+                       var ldR=srcfR.localSubdomain();
+                       // first we divide vertices based on the number of edges
+                       var startVer=srcfR[ldR.low];
+                       var endVer=srcfR[ldR.high];
+
+                       var startEdge=ldR.low;
+                       var endEdge=ldR.high;
+
+                       forall i in startEdge..endEdge {
+                          var srci=srcR[i];
+                          if ((srci>=startVer) && (srci<=endVer)) {
+                              neighbourR[srci]+=1;
+                             
+                          } else {
+                              var tmpn:int;
+                              var tmpstart:int;
+                              var aggs= newSrcAggregator(int);
+                              aggs.copy(tmpn,neighbourR[srci]);
+                              aggs.flush();
+                              tmpn+=1;
+                              var aggd= newSrcAggregator(int);
+                              aggd.copy(neighbourR[srci],tmpn);
+                              aggd.flush();
+                          }
+
+                       }
+
+                  }//on loc
+              }//coforall
+              for i in 0..StreamNe-1 do {
+                 if (start_iR[srcR[i]] ==-1){
+                     start_iR[srcR[i]]=i;
+                 }
+              }
+          }
+
+
+          coforall loc in Locales  {
+              on loc {
+                  forall i in srcR.localSubdomain(){
+                        srcR[i]=dst[i];
+                        dstR[i]=src[i];
+                   }
+              }
+          }
+          combine_sortR();
+          set_neighbourR();
+
+      }//end of undirected
+
+      timer.stop();
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$Sorting Edges takes ", timer.elapsed()," $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+
+
+
+      timer.start();
+
+      coforall loc in Locales  {
+              on loc {
+                  forall i in neighbour.localSubdomain(){
+                      if ( v_cnt[i]<=1 ) {
+                          neighbour[i]=0;
+                          neighbourR[i]=0;
+                      }
+                  }
+              }
+      }
+      proc stream_tri_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
+                        neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int):string throws{
+          coforall loc in Locales   {
+                   on loc {
+                       var triCount=0:int;
+                       var remoteCnt=0:int;
+                       var localCnt=0:int;
+                       ref srcf=src;
+                       ref df=dst;
+                       ref nf=nei;
+                       ref sf=start_i;
+
+                       ref srcfR=srcR;
+                       ref dfR=dstR;
+                       ref nfR=neiR;
+                       ref sfR=start_iR;
+
+                       var ld=srcf.localSubdomain();
+                       var ldR=srcfR.localSubdomain();
+
+                       // first we divide vertices based on the number of edges
+                       var startVer=srcf[ld.low];
+                       var endVer=srcf[ld.high];
+
+                       StartVerAry[here.id]=startVer;
+                       EndVerAry[here.id]=endVer;
+                       var startEdge=ld.low;
+                       var endEdge=ld.high;
+
+                       var lastVer=-1;
+
+                       //writeln("1 Locale=",here.id, " local domain=", ld, ", Reverse local domain=",ldR);
+
+                       if (here.id>0) {
+                          if EndVerAry[here.id-1]==StartVerAry[here.id] {
+                             startVer+=1;    
+                          } else {
+                             if (StartVerAry[here.id]-EndVerAry[here.id-1]>2 ){
+                                startVer=EndVerAry[here.id-1]+1;
+                             }
+                          }
+                       }
+                       if (here.id==numLocales-1) {
+                             endVer=nei.size-1;
+                       }
+                       if (here.id ==0 ) {
+                          startVer=0;
+                       }
+
+                       //writeln("3 Locale=",here.id, " Updated Starting/End Vertex=[",startVer, ",", endVer, "], StarAry=", StartVerAry, " EndAry=", EndVerAry);
+                       forall u in startVer..endVer with (+ reduce triCount,+ reduce remoteCnt, + reduce localCnt) {// for all the u
+                           //writeln("4 Locale=",here.id, " u=",u, " Enter coforall path");
+                           var uadj= new set(int,parSafe = true);
+                           //var uadj= new set(int);
+                           //var uadj=  new DistBag(int,Locales); //use bag to keep the adjacency of u
+                           var startu_adj:int;
+                           var endu_adj:int;
+                           var numu_adj:int;
+
+                           var startuR_adj:int;
+                           var enduR_adj:int;
+                           var numuR_adj:int;
+
+                           var aggu= newSrcAggregator(int);
+                           aggu.copy(startu_adj,sf[u]);
+                           aggu.copy(endu_adj,sf[u]+nf[u]-1);
+                           aggu.copy(numu_adj,nf[u]);
+
+                           aggu.copy(startuR_adj,sfR[u]);
+                           aggu.copy(enduR_adj,sfR[u]+nfR[u]-1);
+                           aggu.copy(numuR_adj,nfR[u]);
+                           aggu.flush();
+                           //writeln("6 Locale=",here.id, " u[",startu_adj, ",",endu_adj, "], num=",numu_adj);
+
+                           if (numu_adj>0) {
+                               if (startu_adj>=ld.low && endu_adj<=ld.high) {
+                                   forall i in df[startu_adj..endu_adj] with (ref uadj,+ reduce localCnt) {
+                                      if (u<i) {
+                                         uadj.add(i);
+                                         localCnt+=1;
+                                         //writeln("7 Locale=",here.id,  " u=",u, " add local ",i);
+                                      }
+                                   }
+                               } else {
+                                   var tmpuadj: [0..numu_adj-1]int;
+                                   forall (a,b) in zip(tmpuadj,(startu_adj..endu_adj)) 
+                                             with (var agg= newSrcAggregator(int)) {
+                                             agg.copy(a,df[b]);
+                                   }
+                                   forall i in tmpuadj with (ref uadj,+ reduce remoteCnt) {
+                                      if (u<i) {
+                                         uadj.add(i);
+                                         remoteCnt+=1;
+                                         //writeln("7 Locale=",here.id,  " u=",u, " add remote ",i);
+                                      }
+                                   }
+                               }
+                           }
+                           if (numuR_adj>0) {
+                               if (startuR_adj>=ldR.low && enduR_adj<=ldR.high) {
+                                   forall i in dfR[startuR_adj..enduR_adj] with (ref uadj,+ reduce localCnt) {
+                                      if (u<i) {
+                                         uadj.add(i);
+                                         localCnt+=1;
+                                         // writeln("8 Locale=",here.id,  " u=",u, " add reverse lodal ",i);
+                                      }
+                                   }
+                               } else {
+                                   var tmpuadj: [0..numuR_adj-1]int;
+                                   forall (a,b) in zip(tmpuadj,(startuR_adj..enduR_adj)) 
+                                             with (var agg= newSrcAggregator(int)) {
+                                             agg.copy(a,dfR[b]);
+                                   }
+                                   forall i in tmpuadj with (ref uadj,+ reduce remoteCnt) {
+                                      if (u<i) {
+                                         uadj.add(i);
+                                         remoteCnt+=1;
+                                         //writeln("8 Locale=",here.id,  " u=",u, " add reverse remote ",i);
+                                      }
+                                   }
+
+                               }
+
+                           }// end of building uadj 
+                           //writeln("9 Locale=",here.id, " u=",u," got uadj=",uadj, " numu_adj=", numu_adj," numuR_adj=", numuR_adj);
+
+                           forall v in uadj with (+reduce triCount,ref uadj,+ reduce remoteCnt, + reduce localCnt) {
+                               //writeln("10 Locale=",here.id, " u=",u," and v=",v, " enter forall");
+                               var vadj= new set(int,parSafe = true);
+                               //var vadj= new set(int);
+                               //var vadj=  new DistBag(int,Locales); //use bag to keep the adjacency of v
+                               var startv_adj:int;
+                               var endv_adj:int;
+                               var numv_adj:int;
+
+                               var startvR_adj:int;
+                               var endvR_adj:int;
+                               var numvR_adj:int;
+
+                               var aggv= newSrcAggregator(int);
+                               aggv.copy(startv_adj,sf[v]);
+                               aggv.copy(endv_adj,sf[v]+nf[v]-1);
+                               aggv.copy(numv_adj,nf[v]);
+
+                               aggv.copy(startvR_adj,sfR[v]);
+                               aggv.copy(endvR_adj,sfR[v]+nfR[v]-1);
+                               aggv.copy(numvR_adj,nfR[v]);
+                               aggv.flush();
+
+                               if (numv_adj>0) {
+                                   if (startv_adj>=ld.low && endv_adj<=ld.high) {
+                                       forall i in df[startv_adj..endv_adj] with (ref vadj,+ reduce localCnt) {
+                                          if (v<i) {
+                                             vadj.add(i);
+                                             localCnt+=1;
+                                             //writeln("11 Locale=",here.id,  " v=",v, " add local ",i);
+                                          }
+                                       }
+                                   } else {
+                                       var tmpvadj: [0..numv_adj-1]int;
+                                       forall (a,b) in zip(tmpvadj,(startv_adj..endv_adj)) 
+                                             with (var agg= newSrcAggregator(int)) {
+                                             agg.copy(a,df[b]);
+                                       }
+                                       forall i in tmpvadj with (ref vadj,+ reduce remoteCnt) {
+                                          if (v<i) {
+                                             vadj.add(i);
+                                             remoteCnt+=1;
+                                             //writeln("11 Locale=",here.id,  " v=",v, " add remote ",i);
+                                          }
+                                       }
+
+                                   }
+
+                               }
+                               if (numvR_adj>0) {
+                                   if (startvR_adj>=ldR.low && endvR_adj<=ldR.high) {
+                                       forall i in dfR[startvR_adj..endvR_adj] with (ref vadj,+ reduce localCnt) {
+                                          if (v<i) {
+                                             vadj.add(i);
+                                             localCnt+=1;
+                                             //writeln("12 Locale=",here.id,  " v=",v, " add reverse local ",i);
+                                          }
+                                       }
+                                   } else {
+                                       var tmpvadj: [0..numvR_adj-1]int;
+                                       forall (a,b) in zip(tmpvadj,(startvR_adj..endvR_adj)) 
+                                             with (var agg= newSrcAggregator(int)) {
+                                                 agg.copy(a,dfR[b]);
+                                       }
+                                       forall i in tmpvadj with (ref vadj,+reduce remoteCnt) {
+                                          if (v<i) {
+                                             vadj.add(i);
+                                             remoteCnt+=1;
+                                             //writeln("12 Locale=",here.id,  " v=",v, " add reverse remote ",i);
+                                          }
+                                       }
+
+                                   }
+
+                               }
+                               //var triset= new set(int,parSafe=true);
+                               //var triset= new set(int);
+                               //triset=uadj & vadj;
+                               //writeln("30 Locale=",here.id, " u=",u, " v=",v, " uadj=",uadj, " vadj=",vadj);
+                               //var num=uadj.getSize();
+                               var num=vadj.size;
+                               var localcnt=0:int;
+                               forall i in vadj with (+ reduce triCount,+reduce localcnt) {
+                                   if uadj.contains(i) {
+                                      triCount+=1;
+                                      localcnt+=1;
+                                   }
+                               }
+                               writeln("3333 Locale=",here.id, "tri=", localcnt," u=",u, " v=",v, "u_cnt=", v_cnt[u], " v_cnt=", v_cnt[v], " ratio=", (localcnt*1.0)/(v_cnt[u]+v_cnt[v]):real);
+                               //writeln("31 Locale=",here.id, "tri=", triCount," u=",u, " v=",v);
+                               //vadj.clear();
+                           }// end forall v adj build
+                           //uadj.clear();
+                       }// end forall u adj build
+                       subTriSum[here.id]=triCount;
+                       RemoteAccessTimes[here.id]=remoteCnt;
+                       LocalAccessTimes[here.id]=localCnt;
+                       //writeln("100 Locale=",here.id, " subTriSum=", subTriSum);
+                   }//end on loc
+          }//end coforall loc
+          return "success";
+      }//end of stream_tri_kernel_u
+
+
+      proc return_stream_tri_count(): string throws{
+          for i in subTriSum {
+             TotalCnt[0]+=i;
+          }
+          var totalRemote=0:int;
+          var totalLocal=0:int;
+          for i in RemoteAccessTimes {
+              totalRemote+=i;
+          }
+          for i in LocalAccessTimes {
+              totalLocal+=i;
+          }
+          //TotalCnt[0]/=3;
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("TriangleNumber=", TotalCnt[0]);
+          writeln("LocalRatio=", (totalLocal:real)/((totalRemote+totalLocal):real),", TotalTimes=",totalRemote+totalLocal);
+          writeln("LocalAccessTimes=", totalLocal,", RemoteAccessTimes=",totalRemote);
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          //writeln("1000 Locale=",here.id, " subTriSum=", subTriSum, "TotalCnt=",TotalCnt);
+          var countName = st.nextName();
+          var countEntry = new shared SymEntry(TotalCnt);
+          st.addEntry(countName, countEntry);
+
+          var cntMsg =  'created ' + st.attrib(countName);
+          return cntMsg;
+
+      }//end of proc return_stream
+
+
+      stream_tri_kernel_u(neighbour, start_i,src,dst,
+                           neighbourR, start_iR,srcR,dstR);
+      repMsg=return_stream_tri_count();
+      
+      timer.stop();
+      writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("Streaming Triangle Counting time=");
+      writeln("$$$$$$$$$$$$ Streaming Triangle Counting time= ", timer.elapsed()," $$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+      smLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+      return new MsgTuple(repMsg, MsgType.NORMAL);
+
+  }
 
 }
 
