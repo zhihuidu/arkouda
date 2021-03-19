@@ -10,7 +10,12 @@ from arkouda.dtypes import NUMBER_FORMAT_STRINGS, resolve_scalar_dtype, \
      translate_np_dtype
 import json
 
-__all__ = ['Strings']
+from arkouda.pdarrayclass import _parse_single_int_array_value
+from arkouda.dtypes import str as akstr
+from arkouda.dtypes import int64 as akint
+
+
+__all__ = ['Strings','SArrays']
 
 class Strings:
     """
