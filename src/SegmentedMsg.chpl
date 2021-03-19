@@ -3887,8 +3887,8 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       }
       proc stream_tri_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
                         neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int):string throws{
-          var number_edge:int;
-          var sum_ratio:real;
+          var number_edge=0:int;
+          var sum_ratio=0.0:real;
           coforall loc in Locales with (+ reduce number_edge, + reduce sum_ratio)  {
                    on loc {
                        var triCount=0:int;
@@ -4104,7 +4104,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                writeln("3333 Locale=",here.id, " tri=", localcnt," u=",u, " v=",v, " u_cnt=", v_cnt[u], " v_cnt=", v_cnt[v], " ratio=", (localcnt*1.0)/(v_cnt[u]+v_cnt[v]):real);
                                if (localcnt>0) {
                                    number_edge+=1;
-                                   sum_ratio+=(localcnt*1.0)/(v_cnt[u]+v_cnt[v]):real);
+                                   sum_ratio+=(localcnt*1.0)/(v_cnt[u]+v_cnt[v]):real;
                                }
                                //writeln("31 Locale=",here.id, "tri=", triCount," u=",u, " v=",v);
                                //vadj.clear();
