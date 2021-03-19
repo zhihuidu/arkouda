@@ -9,13 +9,14 @@ from arkouda.dtypes import structDtypeCodes, NUMBER_FORMAT_STRINGS, float64, int
     int_scalars, numeric_scalars
 from arkouda.dtypes import dtype as akdtype
 from arkouda.pdarrayclass import pdarray, create_pdarray
-from arkouda.strings import Strings
+from arkouda.strings import Strings, SArrays
+from arkouda.graph import GraphD, GraphDW,GraphUD,GraphUDW
 
 __all__ = ["array", "zeros", "ones", "zeros_like", "ones_like", 
            "arange", "linspace", "randint", "uniform", "standard_normal",
            "random_strings_uniform", "random_strings_lognormal", 
-           "from_series"
-          ]
+           "from_series", "suffix_array","lcp_array","suffix_array_file",
+           "rmat_gen","graph_bfs","graph_file_read","graph_triangle","stream_file_read","stream_tri_cnt"]
 
 @typechecked
 def from_series(series : pd.Series, 
@@ -596,7 +597,7 @@ def randint(low : numeric_scalars, high : numeric_scalars,
 
     repMsg = generic_msg(cmd='randint', args='{} {} {} {} {}'.\
                          format(sizestr, dtype.name, lowstr, highstr, seed))
-    return create_pdarray(repMsg)
+    return create_pdarray(cast(str,repMsg))
 
 @typechecked
 def uniform(size : int_scalars, low : numeric_scalars=float(0.0), 
@@ -810,3 +811,518 @@ def random_strings_lognormal(logmean : numeric_scalars, logstd : numeric_scalars
                  NUMBER_FORMAT_STRINGS['float64'].format(logstd),
                  seed))
     return Strings(*(cast(str,repMsg).split('+')))
+
+
+
+@typechecked
+def suffix_array(strings : Strings) -> SArrays:
+        """
+        Return the suffix arrays of given strings. The size/shape of each suffix
+	arrays is the same as the corresponding strings. 
+	A simple example of suffix array is as follow. Given a string "banana$",
+	all the suffixes are as follows. 
+	s[0]="banana$"
+	s[1]="anana$"
+	s[2]="nana$"
+	s[3]="ana$"
+	s[4]="na$"
+	s[5]="a$"
+	s[6]="$"
+	The suffix array of string "banana$"  is the array of indices of sorted suffixes.
+	s[6]="$"
+	s[5]="a$"
+	s[3]="ana$"
+	s[1]="anana$"
+	s[0]="banana$"
+	s[4]="na$"
+	s[2]="nana$"
+	so sa=[6,5,3,1,0,4,2]
+
+        Returns
+        -------
+        pdarray
+            The suffix arrays of the given strings
+
+        See Also
+        --------
+
+        Notes
+        -----
+        
+        Raises
+        ------  
+        RuntimeError
+            Raised if there is a server-side error in executing group request or
+            creating the pdarray encapsulating the return message
+        """
+        cmd = "segmentedSuffixAry"
+        args ="{} {} {}".format( strings.objtype,
+                                                        strings.offsets.name,
+                                                        strings.bytes.name) 
+        repMsg = generic_msg(cmd=cmd,args=args)
+        return SArrays(*(cast(str,repMsg).split('+')))
+
+
+@typechecked
+def lcp_array(suffixarrays : SArrays, strings : Strings) -> SArrays:
+        """
+        Return the longest common prefix of given suffix arrays. The size/shape of each lcp
+	arrays is the same as the corresponding suffix array. 
+        -------
+        SArrays 
+            The LCP arrays of the given suffix arrays
+
+        See Also
+        --------
+
+        Notes
+        -----
+        
+        Raises
+        ------  
+        RuntimeError
+            Raised if there is a server-side error in executing group request or
+            creating the pdarray encapsulating the return message
+        """
+        cmd = "segmentedLCP"
+        args= "{} {} {} {} {}".format( suffixarrays.objtype,
+                                                        suffixarrays.offsets.name,
+                                                        suffixarrays.bytes.name, 
+                                                        strings.offsets.name,
+                                                        strings.bytes.name) 
+        repMsg = generic_msg(cmd=cmd,args=args)
+        return SArrays(*(cast(str,repMsg).split('+')))
+
+@typechecked
+def suffix_array_file(filename: str)  -> tuple:
+#def suffix_array_file(filename: str)  -> tuple[SArrays,Strings]:
+        """
+        This function is major used for testing correctness and performance
+        Return the suffix array of given file name's content as a string. 
+	A simple example of suffix array is as follow. Given string "banana$",
+	all the suffixes are as follows. 
+	s[0]="banana$"
+	s[1]="anana$"
+	s[2]="nana$"
+	s[3]="ana$"
+	s[4]="na$"
+	s[5]="a$"
+	s[6]="$"
+	The suffix array of string "banana$"  is the array of indices of sorted suffixes.
+	s[6]="$"
+	s[5]="a$"
+	s[3]="ana$"
+	s[1]="anana$"
+	s[0]="banana$"
+	s[4]="na$"
+	s[2]="nana$"
+	so sa=[6,5,3,1,0,4,2]
+
+        Returns
+        -------
+        pdarray
+            The suffix arrays of the given strings
+
+        See Also
+        --------
+
+        Notes
+        -----
+        
+        Raises
+        ------  
+        RuntimeError
+            Raised if there is a server-side error in executing group request or
+            creating the pdarray encapsulating the return message
+        """
+        cmd = "segmentedSAFile"
+        args= "{}".format( filename )
+        repMsg = generic_msg(cmd=cmd,args=args)
+        tmpmsg=cast(str,repMsg).split('+')
+        sastr=tmpmsg[0:2]
+        strstr=tmpmsg[2:4]
+        suffixarray=SArrays(*(cast(str,sastr))) 
+        originalstr=Strings(*(cast(str,strstr))) 
+        return suffixarray,originalstr
+#        return SArrays(*(cast(str,repMsg).split('+')))
+
+
+@typechecked
+def graph_file_read(Ne:int, Nv:int,Ncol:int,directed:int, filename: str)  -> Union[GraphD,GraphUD,GraphDW,GraphUDW]:
+        """
+        This function is used for creating a graph from a file.
+        The file should like this
+          1   5
+          13  9
+          4   8
+          7   6
+        This file means the edges are <1,5>,<13,9>,<4,8>,<7,6>. If additional column is added, it is the weight
+        of each edge.
+        Ne : the total number of edges of the graph
+        Nv : the total number of vertices of the graph
+        Ncol: how many column of the file. Ncol=2 means just edges (so no weight and weighted=0) 
+              and Ncol=3 means there is weight for each edge (so weighted=1). 
+        directed: 0 means undirected graph and 1 means directed graph
+        Returns
+        -------
+        Graph
+            The Graph class to represent the data
+
+        See Also
+        --------
+
+        Notes
+        -----
+        
+        Raises
+        ------  
+        RuntimeError
+        """
+        cmd = "segmentedGraphFile"
+        args="{} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename);
+        #repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
+        if (int(Ncol) >2) :
+             weighted=1
+        else:
+             weighted=0
+
+        if (directed!=0)  :
+           if (weighted!=0) :
+               return GraphDW(*(cast(str,repMsg).split('+')))
+           else:
+               return GraphD(*(cast(str,repMsg).split('+')))
+        else:
+           if (weighted!=0) :
+               return GraphUDW(*(cast(str,repMsg).split('+')))
+           else:
+               return GraphUD(*(cast(str,repMsg).split('+')))
+
+
+
+@typechecked
+def stream_file_read(Ne:int, Nv:int,Ncol:int,directed:int, filename: str,\
+                     factor:int)  -> Union[GraphD,GraphUD,GraphDW,GraphUDW]:
+        """
+        This function is used for creating a graph from a file.
+        The file should like this
+          1   5
+          13  9
+          4   8
+          7   6
+        This file means the edges are <1,5>,<13,9>,<4,8>,<7,6>. If additional column is added, it is the weight
+        of each edge.
+        Ne : the total number of edges of the graph
+        Nv : the total number of vertices of the graph
+        Ncol: how many column of the file. Ncol=2 means just edges (so no weight and weighted=0) 
+              and Ncol=3 means there is weight for each edge (so weighted=1). 
+        directed: 0 means undirected graph and 1 means directed graph
+        Returns
+        -------
+        Graph
+            The Graph class to represent the data
+
+        See Also
+        --------
+
+        Notes
+        -----
+        
+        Raises
+        ------  
+        RuntimeError
+        """
+        cmd = "segmentedStreamFile"
+        args="{} {} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename,factor);
+        #repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
+        if (int(Ncol) >2) :
+             weighted=1
+        else:
+             weighted=0
+
+        if (directed!=0)  :
+           if (weighted!=0) :
+               return GraphDW(*(cast(str,repMsg).split('+')))
+           else:
+               return GraphD(*(cast(str,repMsg).split('+')))
+        else:
+           if (weighted!=0) :
+               return GraphUDW(*(cast(str,repMsg).split('+')))
+           else:
+               return GraphUD(*(cast(str,repMsg).split('+')))
+
+
+@typechecked
+def rmat_gen (lgNv:int, Ne_per_v:int, p:float, directed: int,weighted:int) ->\
+              Union[GraphD,GraphUD,GraphDW,GraphUDW]:
+        """
+        This function is for creating a graph using rmat graph generator
+        Returns
+        -------
+        Graph
+            The Graph class to represent the data
+
+        See Also
+        --------
+
+        Notes
+        -----
+        
+        Raises
+        ------  
+        RuntimeError
+        """
+        cmd = "segmentedRMAT"
+        args= "{} {} {} {} {}".format(lgNv, Ne_per_v, p, directed, weighted)
+        msg = "segmentedRMAT {} {} {} {} {}".format(lgNv, Ne_per_v, p, directed, weighted)
+        #repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
+        if (directed!=0)  :
+           if (weighted!=0) :
+               return GraphDW(*(cast(str,repMsg).split('+')))
+           else:
+               return GraphD(*(cast(str,repMsg).split('+')))
+        else:
+           if (weighted!=0) :
+               return GraphUDW(*(cast(str,repMsg).split('+')))
+           else:
+               return GraphUD(*(cast(str,repMsg).split('+')))
+
+@typechecked
+def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pdarray:
+        """
+        This function is generating the breadth-first search vertices sequences in given graph
+        starting from the given root vertex
+        Returns
+        -------
+        pdarray
+            The bfs vertices results
+
+        See Also
+        --------
+
+        Notes
+        -----
+        
+        Raises
+        ------  
+        RuntimeError
+        """
+        cmd="segmentedGraphBFS"
+        #if (cast(int,graph.directed)!=0)  :
+        if (int(graph.directed)>0)  :
+            if (int(graph.weighted)==0):
+              # directed unweighted GraphD
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {}".format(
+                 graph.n_vertices,graph.n_edges,\
+                 graph.directed,graph.weighted,\
+                 graph.src.name,graph.dst.name,\
+                 graph.start_i.name,graph.neighbour.name,\
+                 root)
+            else:
+              # directed weighted GraphDW
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {}".format(
+                 graph.n_vertices,graph.n_edges,\
+                 graph.directed,graph.weighted,\
+                 graph.src.name,graph.dst.name,\
+                 graph.start_i.name,graph.neighbour.name,\
+                 graph.v_weight.name,graph.e_weight.name,\
+                 root)
+        else:
+            if (int(graph.weighted)==0):
+              # undirected unweighted GraphUD
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+                 graph.n_vertices,graph.n_edges,\
+                 graph.directed,graph.weighted,\
+                 graph.src.name,graph.dst.name,\
+                 graph.start_i.name,graph.neighbour.name,\
+                 graph.srcR.name,graph.dstR.name,\
+                 graph.start_iR.name,graph.neighbourR.name,\
+                 root)
+            else:
+              # undirected weighted GraphUDW 15
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+                 graph.n_vertices,graph.n_edges,\
+                 graph.directed,graph.weighted,\
+                 graph.src.name,graph.dst.name,\
+                 graph.start_i.name,graph.neighbour.name,\
+                 graph.srcR.name,graph.dstR.name,\
+                 graph.start_iR.name,graph.neighbourR.name,\
+                 graph.v_weight.name,graph.e_weight.name,\
+                 root)
+
+        #repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
+        '''
+        tmpmsg=cast(str,repMsg).split('+')
+        levelstr=tmpmsg[0:1]
+        vertexstr=tmpmsg[1:2]
+        levelary=create_pdarray(*(cast(str,levelstr)) )
+        
+        vertexary=create_pdarray(*(cast(str,vertexstr)) )
+        '''
+        return create_pdarray(repMsg)
+        #return (levelary,vertexary)
+
+
+@typechecked
+def graph_triangle (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW]) -> pdarray:
+        """
+        This function will return the number of triangles in a static graph.
+        Returns
+        -------
+        pdarray
+            The total number of triangles.
+
+        See Also
+        --------
+
+        Notes
+        -----
+        
+        Raises
+        ------  
+        RuntimeError
+        """
+        cmd="segmentedGraphTri"
+        #if (cast(int,graph.directed)!=0)  :
+        if (int(graph.directed)>0)  :
+            if (int(graph.weighted)==0):
+              # directed unweighted GraphD
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {}".format(
+                 graph.n_vertices,graph.n_edges,\
+                 graph.directed,graph.weighted,\
+                 graph.src.name,graph.dst.name,\
+                 graph.start_i.name,graph.neighbour.name )
+            else:
+              # directed weighted GraphDW
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {}".format(
+                 graph.n_vertices,graph.n_edges,\
+                 graph.directed,graph.weighted,\
+                 graph.src.name,graph.dst.name,\
+                 graph.start_i.name,graph.neighbour.name,\
+                 graph.v_weight.name,graph.e_weight.name )
+        else:
+            if (int(graph.weighted)==0):
+              # undirected unweighted GraphUD
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {} {}".format(
+                 graph.n_vertices,graph.n_edges,\
+                 graph.directed,graph.weighted,\
+                 graph.src.name,graph.dst.name,\
+                 graph.start_i.name,graph.neighbour.name,\
+                 graph.srcR.name,graph.dstR.name,\
+                 graph.start_iR.name,graph.neighbourR.name )
+            else:
+              # undirected weighted GraphUDW 15
+              #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+                 graph.n_vertices,graph.n_edges,\
+                 graph.directed,graph.weighted,\
+                 graph.src.name,graph.dst.name,\
+                 graph.start_i.name,graph.neighbour.name,\
+                 graph.srcR.name,graph.dstR.name,\
+                 graph.start_iR.name,graph.neighbourR.name,\
+                 graph.v_weight.name,graph.e_weight.name)
+
+        #repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
+        '''
+        tmpmsg=cast(str,repMsg).split('+')
+        levelstr=tmpmsg[0:1]
+        vertexstr=tmpmsg[1:2]
+        levelary=create_pdarray(*(cast(str,levelstr)) )
+        
+        vertexary=create_pdarray(*(cast(str,vertexstr)) )
+        '''
+        return create_pdarray(repMsg)
+        #return (levelary,vertexary)
+
+
+@typechecked
+def stream_tri_cnt(Ne:int, Nv:int,Ncol:int,directed:int, filename: str,\
+                     factor:int)  -> pdarray:
+        """
+        This function is used for creating a graph from a file.
+        The file should like this
+          1   5
+          13  9
+          4   8
+          7   6
+        This file means the edges are <1,5>,<13,9>,<4,8>,<7,6>. If additional column is added, it is the weight
+        of each edge.
+        Ne : the total number of edges of the graph
+        Nv : the total number of vertices of the graph
+        Ncol: how many column of the file. Ncol=2 means just edges (so no weight and weighted=0) 
+              and Ncol=3 means there is weight for each edge (so weighted=1). 
+        directed: 0 means undirected graph and 1 means directed graph
+        Returns
+        -------
+        Graph
+            The Graph class to represent the data
+
+        See Also
+        --------
+
+        Notes
+        -----
+        
+        Raises
+        ------  
+        RuntimeError
+        """
+        cmd = "segmentedStreamTri"
+        args="{} {} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename,factor);
+        #repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
+        return create_pdarray(repMsg)
+
+
+
+'''
+@typechecked
+def graph_dfs (graph: Union[GraphD,GraphUD,GraphDW,GraphUDW], root: int ) -> tuple:
+        msg = "segmentedGraphDFS {} {} {} {} {} {} {} {}".format(graph.n_vertices,graph.n_edges,\
+                 graph.directed,graph.src.name,graph.dst.name,\
+                 graph.start_i.name,graph.neighbour.name,root)
+        repMsg = generic_msg(msg)
+        tmpmsg=cast(str,repMsg).split('+')
+        levelstr=tmpmsg[0:1]
+        vertexstr=tmpmsg[1:2]
+        levelary=create_pdarray(*(cast(str,levelstr)) )
+        
+        vertexary=create_pdarray(*(cast(str,vertexstr)) )
+        return (levelary,vertexary)
+
+@typechecked
+def components (graph:  Union[GraphD,GraphUD,GraphDW,GraphUDW] ) -> int :
+        """
+        This function returns the number of components of the given graph
+        Returns
+        -------
+        int
+            The total number of components
+
+        See Also
+        --------
+
+        Notes
+        -----
+        
+        Raises
+        ------  
+        RuntimeError
+        """
+        cmd = "segmentedGraphComponents"
+        args= "{} {}".format(graph.edges.name,graph.vertices.name)
+        msg = "segmentedGraphComponents {} {}".format(graph.edges.name,graph.vertices.name)
+        repMsg = generic_msg(cmd=cmd,args=args)
+        return cast(int,repMsg)
+'''
