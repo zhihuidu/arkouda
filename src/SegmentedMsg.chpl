@@ -1838,10 +1838,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                             }
                       }
                       if srclocal.contains(Streamcurline) {
-                          if ((curline<StreamNe) || (randv.getNext()< 1.0/Factor:real) ) {
+                          //if ((curline<StreamNe) || (randv.getNext()< 1.0/Factor:real) ) {
                               src[Streamcurline]=(a:int) % StreamNv;
                               dst[Streamcurline]=(b:int) % StreamNv;
-                          }
+                          //}
                       }
                       curline+=1;
                       Streamcurline=curline%StreamNe;
@@ -3591,11 +3591,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                       var a_hash=(a:int) % StreamNv;
                       var b_hash=(b:int) % StreamNv;
                       if srclocal.contains(Streamcurline) {
-                          if ((curline<StreamNe) || (randv.getNext()>= 1.0/Factor:real) ) {
+                          //if ((curline<StreamNe) || (randv.getNext()>= 1.0/Factor:real) ) {
                               src[Streamcurline]=a_hash;
                               dst[Streamcurline]=b_hash;
                               e_cnt[Streamcurline]+=1;
-                          }
+                          //}
                       }
                       if neilocal.contains(a_hash) {
                           v_cnt[a_hash]+=1;
@@ -4104,7 +4104,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                if (localcnt>0) {
                                    number_edge+=1;
                                    sum_ratio+=(v_cnt[u]+v_cnt[v]):real/localcnt:real;
-                                   writeln("3333 Locale=",here.id, " tri=", localcnt," u=",u, " v=",v, " u_cnt=", v_cnt[u], " v_cnt=", v_cnt[v], " ratio=", (v_cnt[u]+v_cnt[v]):real/localcnt:real);
+                                   writeln("3333 Locale=",here.id, " tri=", localcnt," u=",u, " v=",v, " u_cnt=", v_cnt[u], " v_cnt=", v_cnt[v], " ratio=", (v_cnt[u]+v_cnt[v]):real/localcnt:real," overlaping u degree=",v_cnt[u]-neighbour[u]-neighbourR[u], " overlapping v degree=",v_cnt[v]-neighbour[v]-neighbourR[v]);
                                }
                                //writeln("31 Locale=",here.id, "tri=", triCount," u=",u, " v=",v);
                                //vadj.clear();
@@ -4117,7 +4117,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        //writeln("100 Locale=",here.id, " subTriSum=", subTriSum);
                    }//end on loc
           }//end coforall loc
-          writeln("the average ratio is", sum_ratio/number_edge);
+          writeln("Average ratio=", sum_ratio/number_edge, " Total number of edges=",number_edge);
           return "success";
       }//end of stream_tri_kernel_u
 
