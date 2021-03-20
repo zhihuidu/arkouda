@@ -3888,8 +3888,9 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       proc stream_tri_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
                         neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int):string throws{
           var number_edge=0:int;
-          var sum_ratio=0.0:real;
-          coforall loc in Locales with (+ reduce number_edge, + reduce sum_ratio)  {
+          var sum_ratio1=0.0:real;
+          var sum_ratio2=0.0:real;
+          coforall loc in Locales with (+ reduce number_edge, + reduce sum_ratio1,+reduce sum_ratio2)  {
                    on loc {
                        var triCount=0:int;
                        var remoteCnt=0:int;
@@ -3937,7 +3938,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        }
 
                        //writeln("3 Locale=",here.id, " Updated Starting/End Vertex=[",startVer, ",", endVer, "], StarAry=", StartVerAry, " EndAry=", EndVerAry);
-                       forall u in startVer..endVer with (+ reduce triCount,+ reduce remoteCnt, + reduce localCnt,+ reduce number_edge, + reduce sum_ratio) {// for all the u
+                       forall u in startVer..endVer with (+ reduce triCount,+ reduce remoteCnt, + reduce localCnt,+ reduce number_edge, + reduce sum_ratio1,+reduce sum_ratio2) {// for all the u
                            //writeln("4 Locale=",here.id, " u=",u, " Enter coforall path");
                            var uadj= new set(int,parSafe = true);
                            //var uadj= new set(int);
@@ -4013,7 +4014,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            }// end of building uadj 
                            //writeln("9 Locale=",here.id, " u=",u," got uadj=",uadj, " numu_adj=", numu_adj," numuR_adj=", numuR_adj);
 
-                           forall v in uadj with (+reduce triCount,ref uadj,+ reduce remoteCnt, + reduce localCnt,+ reduce number_edge, + reduce sum_ratio) {
+                           forall v in uadj with (+reduce triCount,ref uadj,+ reduce remoteCnt, + reduce localCnt,+ reduce number_edge, + reduce sum_ratio1,+reduce sum_ratio2) {
                                //writeln("10 Locale=",here.id, " u=",u," and v=",v, " enter forall");
                                var vadj= new set(int,parSafe = true);
                                //var vadj= new set(int);
@@ -4094,17 +4095,18 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                //writeln("30 Locale=",here.id, " u=",u, " v=",v, " uadj=",uadj, " vadj=",vadj);
                                //var num=uadj.getSize();
                                var num=vadj.size;
-                               var localcnt=0:int;
-                               forall i in vadj with (+ reduce triCount,+reduce localcnt) {
+                               var localtricnt=0:int;
+                               forall i in vadj with (+ reduce triCount,+reduce localtricnt) {
                                    if uadj.contains(i) {
                                       triCount+=1;
-                                      localcnt+=1;
+                                      localtricnt+=1;
                                    }
                                }
-                               if (localcnt>0) {
+                               if (localtricnt>0) {
                                    number_edge+=1;
-                                   sum_ratio+=(v_cnt[u]-neighbour[u]-neighbourR[u]+v_cnt[v]-neighbour[v]-neighbourR[v])/localcnt:real;
-                                   writeln("3333 Locale=",here.id, " tri=", localcnt," u=",u, " v=",v, " u_cnt=", v_cnt[u], " v_cnt=", v_cnt[v], " ratio=", (v_cnt[u]-neighbour[u]-neighbourR[u]+v_cnt[v]-neighbour[v]-neighbourR[v])/localcnt:real);
+                                   sum_ratio1+=(v_cnt[u]-neighbour[u]-neighbourR[u]+v_cnt[v]-neighbour[v]-neighbourR[v])/localtricnt:real;
+                                   sum_ratio2+=(v_cnt[u]+v_cnt[v]):real/(neighbour[u]+neighbourR[u]+neighbour[v]+neighbourR[v]):real;
+                                   //writeln("3333 Locale=",here.id, " tri=", localtricnt," u=",u, " v=",v, " u_cnt=", v_cnt[u], " v_cnt=", v_cnt[v], " ratio=", (v_cnt[u]-neighbour[u]-neighbourR[u]+v_cnt[v]-neighbour[v]-neighbourR[v])/localtricnt:real);
                                }
                                //writeln("31 Locale=",here.id, "tri=", triCount," u=",u, " v=",v);
                                //vadj.clear();
@@ -4117,14 +4119,18 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        //writeln("100 Locale=",here.id, " subTriSum=", subTriSum);
                    }//end on loc
           }//end coforall loc
-          var averageratio=sum_ratio/number_edge;
-          writeln("Average ratio=", averageratio, " Total number of edges=",number_edge);
+          var averageratio1=sum_ratio1/number_edge/2;
+          var averageratio2=sum_ratio2/number_edge;
+          writeln("Average ratio1=", averageratio1, " Total number of edges=",number_edge);
+          writeln("Average ratio2=", averageratio2, " Total number of edges=",number_edge);
           var totaltri=0;
           for i in subTriSum {
              totaltri+=i;
           }
-          writeln("Estimated triangles=",totaltri*Factor*averageratio**(0.5));
-          writeln("Estimated triangles=",totaltri*Factor*averageratio**(0.25));
+          writeln("Estimated triangles=",totaltri*Factor*max(1,averageratio1**(0.01)));
+          writeln("Estimated triangles=",totaltri*Factor*max(1,averageratio2**(0.5)));
+          writeln("Estimated triangles=",totaltri*Factor*max(1,averageratio2**(0.2)));
+          writeln("Estimated triangles=",totaltri*Factor*max(1,averageratio2**(0.1)));
           return "success";
       }//end of stream_tri_kernel_u
 

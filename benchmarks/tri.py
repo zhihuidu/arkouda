@@ -87,7 +87,7 @@ def time_ak_tri_graph(lgNv:int, Ne_per_v:int, p:float,directed:int,weighted:int)
     print("edges weight    ={}".format(Graph.e_weight))
     '''
     start = time.time()
-    triary=ak.stream_tri_cnt(3056,1025,2,directed,"data/delaunay_n10.gr",4)
+    triary=ak.stream_tri_cnt(3056,1025,2,directed,"data/delaunay_n10.gr",2)
     end = time.time()
     print("----------------------")
     print("triary = ak.stream_tri_count(Graph)")
