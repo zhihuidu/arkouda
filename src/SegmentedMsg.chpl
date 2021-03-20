@@ -4103,8 +4103,8 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                }
                                if (localcnt>0) {
                                    number_edge+=1;
-                                   sum_ratio+=(v_cnt[u]+v_cnt[v]):real/localcnt:real;
-                                   writeln("3333 Locale=",here.id, " tri=", localcnt," u=",u, " v=",v, " u_cnt=", v_cnt[u], " v_cnt=", v_cnt[v], " ratio=", (v_cnt[u]+v_cnt[v]):real/localcnt:real," overlaping u degree=",v_cnt[u]-neighbour[u]-neighbourR[u], " overlapping v degree=",v_cnt[v]-neighbour[v]-neighbourR[v]);
+                                   sum_ratio+=(v_cnt[u]-neighbour[u]-neighbourR[u]+v_cnt[v]-neighbour[v]-neighbourR[v])/localcnt:real;
+                                   writeln("3333 Locale=",here.id, " tri=", localcnt," u=",u, " v=",v, " u_cnt=", v_cnt[u], " v_cnt=", v_cnt[v], " ratio=", (v_cnt[u]-neighbour[u]-neighbourR[u]+v_cnt[v]-neighbour[v]-neighbourR[v])/localcnt:real);
                                }
                                //writeln("31 Locale=",here.id, "tri=", triCount," u=",u, " v=",v);
                                //vadj.clear();
@@ -4117,7 +4117,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        //writeln("100 Locale=",here.id, " subTriSum=", subTriSum);
                    }//end on loc
           }//end coforall loc
-          writeln("Average ratio=", sum_ratio/number_edge, " Total number of edges=",number_edge);
+          var averageratio=sum_ratio/number_edge;
+          writeln("Average ratio=", averageratio, " Total number of edges=",number_edge);
+          var totaltri=0;
+          for i in subTriSum {
+             totaltri+=i;
+          }
+          writeln("Estimated triangles=",totaltri*Factor*averageratio**(0.5));
+          writeln("Estimated triangles=",totaltri*Factor*averageratio**(0.25));
           return "success";
       }//end of stream_tri_kernel_u
 
