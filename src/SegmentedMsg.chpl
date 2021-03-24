@@ -1324,7 +1324,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       var repMsg: string;
 
       var startpos, endpos:int;
-      var sort:int;
+      var sort_flag:int;
       var filesize:int;
 
       proc readComplete() throws {
@@ -1462,25 +1462,25 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
         //tmpedges = dst[iv]; //# permute second vertex into sorted order
         //dst=tmpedges;
         startpos=0;
-        sort=0;
+        sort_flag=0;
         while (startpos < Ne-2) {
            endpos=startpos+1;
-           sort=0;
+           sort_flag=0;
            while (endpos <=Ne-1) {
               if (src[startpos]==src[endpos])  {
-                 sort=1;
+                 sort_flag=1;
                  endpos+=1;
                  continue;
               } else {
                  break;
               }
            }//end of while endpos
-           if (sort==1) {
+           if (sort_flag==1) {
               var tmpary:[0..endpos-startpos-1] int;
               tmpary=dst[startpos..endpos-1];
               var ivx=radixSortLSD_ranks(tmpary);
               dst[startpos..endpos-1]=tmpary[ivx];
-              sort=0;
+              sort_flag=0;
            }
            startpos+=1;
         }//end of while startpos
@@ -1577,25 +1577,25 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              tmpedges = dstR[ivR]; //# permute second vertex into sorted order
              dstR=tmpedges;
              startpos=0;
-             sort=0;
+             sort_flag=0;
              while (startpos < Ne-2) {
                  endpos=startpos+1;
-                 sort=0;
+                 sort_flag=0;
                  while (endpos <=Ne-1) {
                      if (srcR[startpos]==srcR[endpos])  {
-                        sort=1;
+                        sort_flag=1;
                         endpos+=1;
                         continue;
                       } else {
                           break;
                       }
                  }//end of while endpos
-                 if (sort==1) {
+                 if (sort_flag==1) {
                      var tmparyR:[0..endpos-startpos-1] int;
                      tmparyR=dstR[startpos..endpos-1];
                      var ivxR=radixSortLSD_ranks(tmparyR);
                      dstR[startpos..endpos-1]=tmparyR[ivxR];
-                     sort=0;
+                     sort_flag=0;
                  }
                  startpos+=1;
              }//end of while startpos
@@ -1812,7 +1812,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       var repMsg: string;
 
       var startpos, endpos:int;
-      var sort:int;
+      var sort_flag:int;
       var filesize:int;
 
       proc readLinebyLine() throws {
@@ -1913,25 +1913,25 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
         //tmpedges = dst[iv]; //# permute second vertex into sorted order
         //dst=tmpedges;
         startpos=0;
-        sort=0;
+        sort_flag=0;
         while (startpos < StreamNe-2) {
            endpos=startpos+1;
-           sort=0;
+           sort_flag=0;
            while (endpos <=StreamNe-1) {
               if (src[startpos]==src[endpos])  {
-                 sort=1;
+                 sort_flag=1;
                  endpos+=1;
                  continue;
               } else {
                  break;
               }
            }//end of while endpos
-           if (sort==1) {
+           if (sort_flag==1) {
               var tmpary:[0..endpos-startpos-1] int;
               tmpary=dst[startpos..endpos-1];
               var ivx=radixSortLSD_ranks(tmpary);
               dst[startpos..endpos-1]=tmpary[ivx];
-              sort=0;
+              sort_flag=0;
            }
            startpos+=1;
         }//end of while startpos
@@ -2028,25 +2028,25 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              tmpedges = dstR[ivR]; //# permute second vertex into sorted order
              dstR=tmpedges;
              startpos=0;
-             sort=0;
+             sort_flag=0;
              while (startpos < StreamNe-2) {
                  endpos=startpos+1;
-                 sort=0;
+                 sort_flag=0;
                  while (endpos <=StreamNe-1) {
                      if (srcR[startpos]==srcR[endpos])  {
-                        sort=1;
+                        sort_flag=1;
                         endpos+=1;
                         continue;
                       } else {
                           break;
                       }
                  }//end of while endpos
-                 if (sort==1) {
+                 if (sort_flag==1) {
                      var tmparyR:[0..endpos-startpos-1] int;
                      tmparyR=dstR[startpos..endpos-1];
                      var ivxR=radixSortLSD_ranks(tmparyR);
                      dstR[startpos..endpos-1]=tmparyR[ivxR];
-                     sort=0;
+                     sort_flag=0;
                  }
                  startpos+=1;
              }//end of while startpos
@@ -2427,27 +2427,27 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              dst=tmpedges;
              //# to premute/rename vertices
              var startpos=0, endpos:int;
-             var sort=0:int;
+             var sort_flag=0:int;
              while (startpos < Ne-2) {
                      endpos=startpos+1;
-                     sort=0;
+                     sort_flag=0;
                      //writeln("startpos=",startpos,"endpos=",endpos);
                      while (endpos <=Ne-1) {
                          if (src[startpos]==src[endpos])  {
-                              sort=1;
+                              sort_flag=1;
                               endpos+=1;
                               continue;
                          } else {
                               break;
                          }
                      }//end of while endpos
-                     if (sort==1) {
+                     if (sort_flag==1) {
                          var tmpary:[0..endpos-startpos-1] int;
                          tmpary=dst[startpos..endpos-1];
                          var ivx=radixSortLSD_ranks(tmpary);
                          dst[startpos..endpos-1]=tmpary[ivx];
                          //writeln("src1=",src1,"dst1=",dst1,"ivx=",ivx);
-                         sort=0;
+                         sort_flag=0;
                      } 
                      startpos+=1;
              }//end of while startpos
@@ -2639,25 +2639,25 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              dstR=tmpedges;
              var startpos=0:int;
              var endpos:int;
-             var sort=0;
+             var sort_flag=0;
              while (startpos < Ne-2) {
                 endpos=startpos+1;
-                sort=0;
+                sort_flag=0;
                 while (endpos <=Ne-1) {
                    if (srcR[startpos]==srcR[endpos])  {
-                      sort=1;
+                      sort_flag=1;
                       endpos+=1;
                       continue;
                    } else {
                       break;
                    } 
                 }//end of while endpos
-                if (sort==1) {
+                if (sort_flag==1) {
                     var tmparyR:[0..endpos-startpos-1] int;
                     tmparyR=dstR[startpos..endpos-1];
                     var ivxR=radixSortLSD_ranks(tmparyR);
                     dstR[startpos..endpos-1]=tmparyR[ivxR];
-                    sort=0;
+                    sort_flag=0;
                 } 
                 startpos+=1;
              } //end of while startpos
@@ -3568,7 +3568,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
 
 // directly read a stream from given file and build the SegGraph class in memory
-  proc segStreamTriCntMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+  proc segStreamTriCntMsg_tmp(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       var (NeS,NvS,ColS,DirectedS, FileName,FactorS) = payload.splitMsgToTuple(6);
       //writeln("======================Graph Reading=====================");
       //writeln(NeS,NvS,ColS,DirectedS, FileName);
@@ -3610,7 +3610,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       var repMsg: string;
 
       var startpos, endpos:int;
-      var sort:int;
+      var sort_flag:int;
       var filesize:int;
 
       var TotalCnt=0:[0..0] int;
@@ -4256,7 +4256,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
 
 // directly read a stream from given file and build the SegGraph class in memory
-  proc segStreamPLTriCntMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+  proc segStreamTriCntMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       var (NeS,NvS,ColS,DirectedS, FileName,FactorS, CaseS) = payload.splitMsgToTuple(7);
       //writeln("======================Graph Reading=====================");
       //writeln(NeS,NvS,ColS,DirectedS, FileName);
@@ -4341,7 +4341,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
       var linenum=0:int;
       var repMsg: string;
-      var sort:int;
+      var sort_flag:int;
       var filesize:int;
 
       var TotalCnt=0:[0..0] int;
@@ -5038,16 +5038,21 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       tmp[1]=sum2;
       tmp[2]=sum3;
       sort(tmp);
-      select CaseNum {
-          when 0 {
-            TotalCnt[0]=(tmp[0]+tmp[1]+tmp[2])*Factor):int; //average
+      select (CaseS) {
+          when "0" {
+            TotalCnt[0]=((tmp[0]+tmp[1]+tmp[2])*Factor):int; //average
           }
-          when 1 {
+          when "1" {
             TotalCnt[0]=((-7.835*tmp[0]+6.887*tmp[1]+3.961*tmp[2])*Factor):int; //power law regression
           }
-          when 2 {
+          when "2" {
             TotalCnt[0]=((3.697*tmp[0]-2.236*tmp[1]-1.737*tmp[2])*Factor):int; //normal regression
           } 
+          otherwise { 
+              var errorMsg = "not implemented case ="+ CaseS;      
+              smLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);  
+              return new MsgTuple(errorMsg, MsgType.ERROR);    
+          }
 
       }
 
@@ -5123,7 +5128,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       var repMsg: string;
 
       var startpos, endpos:int;
-      var sort:int;
+      var sort_flag:int;
       var filesize:int;
 
       var TotalCnt=0:[0..0] int;
@@ -5811,7 +5816,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       var repMsg: string;
 
       var startpos, endpos:int;
-      var sort:int;
+      var sort_flag:int;
       var filesize:int;
 
       var TotalCnt=0:[0..0] int;
@@ -6499,7 +6504,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       var repMsg: string;
 
       var startpos, endpos:int;
-      var sort:int;
+      var sort_flag:int;
       var filesize:int;
 
       var TotalCnt=0:[0..0] int;
