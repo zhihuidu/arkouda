@@ -1331,7 +1331,8 @@ def streamPL_tri_cnt(Ne:int, Nv:int,Ncol:int,directed:int, filename: str,\
         Nv : the total number of vertices of the graph
         Ncol: how many column of the file. Ncol=2 means just edges (so no weight and weighted=0) 
               and Ncol=3 means there is weight for each edge (so weighted=1). 
-        directed: 0 means undirected graph and 1 means directed graph
+        factor: the sampling graph will be 1/factor of the original one
+        case: 0 calculate the average, 1: using power law regression paramter 2: using normal regression parameter 
         Returns
         -------
         Graph
@@ -1348,7 +1349,7 @@ def streamPL_tri_cnt(Ne:int, Nv:int,Ncol:int,directed:int, filename: str,\
         RuntimeError
         """
         cmd = "segmentedPLStreamTri"
-        args="{} {} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename,factor);
+        args="{} {} {} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename,factor,case);
         #repMsg = generic_msg(msg)
         repMsg = generic_msg(cmd=cmd,args=args)
         return create_pdarray(repMsg)
