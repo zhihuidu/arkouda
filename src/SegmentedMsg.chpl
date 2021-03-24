@@ -21,6 +21,7 @@ module SegmentedMsg {
   public use ArgSortMsg;
   use Time;
   use CommAggregation;
+  use Sort;
 
   private config const DEBUG = false;
   const smLogger = new Logger();
@@ -4256,7 +4257,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
 // directly read a stream from given file and build the SegGraph class in memory
   proc segStreamPLTriCntMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
-      var (NeS,NvS,ColS,DirectedS, FileName,FactorS) = payload.splitMsgToTuple(6);
+      var (NeS,NvS,ColS,DirectedS, FileName,FactorS, CaseS) = payload.splitMsgToTuple(7);
       //writeln("======================Graph Reading=====================");
       //writeln(NeS,NvS,ColS,DirectedS, FileName);
       var Ne=NeS:int;
@@ -4265,6 +4266,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       var NumSketch=3:int;// head, middle, and tail three parts as different sketchs
       var StreamNe=Ne/(Factor*NumSketch):int;
       var StreamNv=Nv/(Factor*NumSketch):int;
+      var CaseNum=CaseS:int;
       var NumCol=ColS:int;
       var directed=DirectedS:int;
       var weighted=0:int;
@@ -5031,8 +5033,23 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       var sum3=stream_tri_kernel_u(neighbour3, start_i3,src3,dst3,
                            neighbourR3, start_iR3,srcR3,dstR3,StartVerAry3,EndVerAry3,
                            subTriSum3, RemoteAccessTimes3,LocalAccessTimes3,v_cnt3);
+      var tmp:[0..2] int;
+      tmp[0]=sum1;
+      tmp[1]=sum2;
+      tmp[2]=sum3;
+      sort(tmp);
+      select CaseNum {
+          when 0 {
+            TotalCnt[0]=(tmp[0]+tmp[1]+tmp[2])*Factor):int; //average
+          }
+          when 1 {
+            TotalCnt[0]=((-7.835*tmp[0]+6.887*tmp[1]+3.961*tmp[2])*Factor):int; //power law regression
+          }
+          when 2 {
+            TotalCnt[0]=((3.697*tmp[0]-2.236*tmp[1]-1.737*tmp[2])*Factor):int; //normal regression
+          } 
 
-      TotalCnt[0]=((sum1+sum2+sum3)*Factor):int;
+      }
 
       writeln("Combine three estimates together, triangles=",TotalCnt[0]);
       var countName = st.nextName();
