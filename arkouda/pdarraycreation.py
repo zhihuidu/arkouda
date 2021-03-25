@@ -1285,7 +1285,7 @@ def streamTail_tri_cnt(Ne:int, Nv:int,Ncol:int,directed:int, filename: str,\
 
 @typechecked
 def streamPL_tri_cnt(Ne:int, Nv:int,Ncol:int,directed:int, filename: str,\
-                     factor:int: case:int)  -> pdarray:
+                     factor:int, case:int)  -> pdarray:
         """
         This function is used for creating a graph from a file.
         The file should like this
