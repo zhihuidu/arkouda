@@ -345,7 +345,7 @@ proc main() {
                 when "segmentedGraphFile"   {repTuple = segGraphFileMsg(cmd, args, st);}
                 when "segmentedStreamFile"   {repTuple = segStreamFileMsg(cmd, args, st);}
                 when "segmentedStreamTri"   {repTuple = segStreamTriCntMsg(cmd, args, st);}
-                //when "segmentedPLStreamTri"   {repTuple = segStreamPLTriCntMsg(cmd, args, st);}
+                when "segmentedPLStreamTri"   {repTuple = segStreamPLTriCntMsg(cmd, args, st);}
                 when "segmentedHeadStreamTri"   {repTuple = segStreamHeadTriCntMsg(cmd, args, st);}
                 when "segmentedMidStreamTri"   {repTuple = segStreamMidTriCntMsg(cmd, args, st);}
                 when "segmentedTailStreamTri"   {repTuple = segStreamTailTriCntMsg(cmd, args, st);}
