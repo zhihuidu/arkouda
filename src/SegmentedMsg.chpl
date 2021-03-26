@@ -4385,9 +4385,9 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                   var Streamcurline=0:int;
                   var edgedomain=src1.localSubdomain();
                   var nodedomain=neighbour1.localSubdomain();
-                  writeln("Locale ID=",here.id," edge local domain=", edgedomain, " node local domain=",nodedomain);
+                  //writeln("Locale ID=",here.id," edge local domain=", edgedomain, " node local domain=",nodedomain);
                   proc initvalue(ref ary:[?D1] int,intvalue:int) {
-                      writeln("Locale ID=",here.id, " sub domain=", ary.localSubdomain());
+                      //writeln("Locale ID=",here.id, " sub domain=", ary.localSubdomain());
                       forall i in ary.localSubdomain() {
                          ary[i]=intvalue;
                       }
@@ -5006,18 +5006,23 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        //writeln("100 Locale=",here.id, " subTriSum=", subTriSum);
                    }//end on loc
           }//end coforall loc
-          var averageratio1=sum_ratio1/number_edge/2:real;
-          var averageratio2=sum_ratio2/number_edge:real;
+          
+          var averageratio1:real;
+          var averageratio2:real;
+          if (number_edge>0) {
+              averageratio1=sum_ratio1/number_edge/2:real;
+              averageratio2=sum_ratio2/number_edge:real;
+          }
           writeln("Average ratio1=", averageratio1, " Total number of edges=",number_edge);
           writeln("Average ratio2=", averageratio2, " Total number of edges=",number_edge);
           var totaltri=0:int;
           for i in subTriSum {
              totaltri+=i;
           }
-          writeln("Estimated triangles 1=",totaltri*Factor*max(1,averageratio1**(0.02)));
-          writeln("Estimated triangles 2=",totaltri*Factor*max(1,averageratio2**(0.1)));
-          writeln("Estimated triangles 3=",totaltri*Factor*max(1,averageratio2**(0.05)));
-          writeln("Estimated triangles 4=",totaltri*Factor*max(1,averageratio2**(0.01)));
+          //writeln("Estimated triangles 1=",totaltri*Factor*max(1,averageratio1**(0.02)));
+          //writeln("Estimated triangles 2=",totaltri*Factor*max(1,averageratio2**(0.1)));
+          //writeln("Estimated triangles 3=",totaltri*Factor*max(1,averageratio2**(0.05)));
+          //writeln("Estimated triangles 4=",totaltri*Factor*max(1,averageratio2**(0.01)));
           return totaltri;
       }//end of stream_tri_kernel_u
 
@@ -5026,13 +5031,60 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       var sum1=stream_tri_kernel_u(neighbour1, start_i1,src1,dst1,
                            neighbourR1, start_iR1,srcR1,dstR1,StartVerAry1,EndVerAry1,
                            subTriSum1, RemoteAccessTimes1,LocalAccessTimes1,v_cnt1);
+
+      var totalRemote=0:int;
+      var totalLocal=0:int;
+      for i in RemoteAccessTimes1 {
+              totalRemote+=i;
+      }
+      for i in LocalAccessTimes1 {
+              totalLocal+=i;
+      }
+      writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("TriangleNumber=", sum1);
+      writeln("LocalRatio=", (totalLocal:real)/((totalRemote+totalLocal):real),", TotalTimes=",totalRemote+totalLocal);
+      writeln("LocalAccessTimes=", totalLocal,", RemoteAccessTimes=",totalRemote);
+      writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+
+
       var sum2=stream_tri_kernel_u(neighbour2, start_i2,src2,dst2,
                            neighbourR2, start_iR2,srcR2,dstR2,StartVerAry2,EndVerAry2,
                            subTriSum2, RemoteAccessTimes2,LocalAccessTimes2,v_cnt2);
 
+
+      totalRemote=0;
+      totalLocal=0;
+      for i in RemoteAccessTimes2 {
+              totalRemote+=i;
+      }
+      for i in LocalAccessTimes2 {
+              totalLocal+=i;
+      }
+      writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("TriangleNumber=", sum2);
+      writeln("LocalRatio=", (totalLocal:real)/((totalRemote+totalLocal):real),", TotalTimes=",totalRemote+totalLocal);
+      writeln("LocalAccessTimes=", totalLocal,", RemoteAccessTimes=",totalRemote);
+      writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+
       var sum3=stream_tri_kernel_u(neighbour3, start_i3,src3,dst3,
                            neighbourR3, start_iR3,srcR3,dstR3,StartVerAry3,EndVerAry3,
                            subTriSum3, RemoteAccessTimes3,LocalAccessTimes3,v_cnt3);
+
+
+      totalRemote=0;
+      totalLocal=0;
+      for i in RemoteAccessTimes3 {
+              totalRemote+=i;
+      }
+      for i in LocalAccessTimes3 {
+              totalLocal+=i;
+      }
+      writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+      writeln("TriangleNumber=", sum3);
+      writeln("LocalRatio=", (totalLocal:real)/((totalRemote+totalLocal):real),", TotalTimes=",totalRemote+totalLocal);
+      writeln("LocalAccessTimes=", totalLocal,", RemoteAccessTimes=",totalRemote);
+      writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+
       var tmp:[0..2] int;
       tmp[0]=sum1;
       tmp[1]=sum2;
