@@ -1250,7 +1250,7 @@ def graph_triangle (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW]) -> pdarray:
 @typechecked
 def stream_tri_cnt(Ne:int, Nv:int,Ncol:int,directed:int, filename: str,\
                      factor:int)  -> pdarray:
-        cmd = "segmentedTailStreamTri"
+        cmd = "segmentedStreamTri"
         args="{} {} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename,factor);
         #repMsg = generic_msg(msg)
         repMsg = generic_msg(cmd=cmd,args=args)
