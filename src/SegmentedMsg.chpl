@@ -2889,68 +2889,77 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
 
       proc test_bfs_kernel(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int):string throws{
+
           var cur_level=0;
           //var SetCurF: domain(int);//use domain to keep the current frontier
           //var SetNextF:domain(int);//use domain to keep the next frontier
-          //var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
-          //var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
+          var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
+          var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
           //var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
           //var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
-          //SetCurF.add(root);
+          SetCurF.add(root);
           var numCurF=1:int;
-          var flag=1:int;
-          
 
           //while (!SetCurF.isEmpty()) {
           while (numCurF>0) {
                 //writeln("SetCurF=");
-                //writeln(SetCurF.these());
-                coforall loc in Locales with (ref flag)   {
+                //writeln(SetCurF);
+                coforall loc in Locales  with (ref SetNextF) {
                    on loc {
+                       ref srcf=src;
+                       ref df=dst;
                        ref nf=nei;
                        ref sf=start_i;
-                       ref df=dst;
-                       ref srcf=src;
 
-                       var ld=srcf.localSubdomain();
-                       //writeln("the local subdomain is");
-                       //writeln(ld);
-                       //var myele:domain(int);
-                       var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
-                       var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
-                       if (flag==1) {
-                          if ((root>=sf.localSubdomain().low) && (root<=sf.localSubdomain().high) ){
-                              SetCurF.add(root);
-                          }
-                          flag+=1;
+                       var edgeBegin=src.localSubdomain().low;
+                       var edgeEnd=src.localSubdomain().high;
+                       var vertexBegin=src[edgeBegin];
+                       var vertexEnd=src[edgeEnd];
+
+                       var LvertexBegin=nf.localSubdomain().low;
+                       var LvertexEnd=nf.localSubdomain().high;
+
+                       proc xlocal(x :int, low:int, high:int):bool{
+                                  if (low<=x && x<=high) {
+                                      return true;
+                                  } else {
+                                      return false;
+                                  }
                        }
+                       //var myEle= new set(int,parSafe = true);
+                       //coforall i in SetCurF with (ref myEle) {
+                       //       if (xlocal(i,vertexBegin,vertexEnd))  {
+                       //           myEle.add(i);
+                       //       }
+                       //}
+                       //coforall i in myEle with (ref SetNextF) {
                        coforall i in SetCurF with (ref SetNextF) {
-                              var numNF=-1 :int;
-                              numNF=nf[i];
-                              ref NF=df[sf[i]..sf[i]+numNF-1];
-                              if (numNF>0) {
-                                   // may be forall j in NF is better?
-                                   for j in NF {
-                                        if (depth[j]==-1) {
-                                           depth[j]=cur_level+1;
-                                           SetNextF.add(j);
-                                        }
-                                   }
-                               
-                              }
-                       }// end forall
+                              if xlocal(i,vertexBegin,vertexEnd) {// current edge has the vertex
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF){
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              } 
+
+                       }//end coforall
                    }//end on loc
-                }//end forall loc
+                }//end coforall loc
                 cur_level+=1;
-                //numCurF=SetNextF.getSize();
+                numCurF=SetNextF.getSize();
                 //numCurF=SetNextF.size;
                 //writeln("SetCurF= ", SetCurF, " SetNextF=", SetNextF, " level ", cur_level+1," numCurf=", numCurF);
                 //numCurF=SetNextF.size;
-                //SetCurF.clear();
-                //SetCurF<=>SetNextF;
-                //SetNextF.clear();
                 //SetCurF=SetNextF;
-                //SetNextF.clear();
+                //SetCurF.clear();
+                SetCurF<=>SetNextF;
+                SetNextF.clear();
           }//end while  
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
@@ -2958,7 +2967,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           return "success";
-      }
+      }//end of bfs_kernel
 
       proc bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
                         neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int):string throws{
@@ -3044,6 +3053,108 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       }//end of bfs_kernel_u
 
 
+
+      proc test_bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
+                        neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int):string throws{
+          var cur_level=0;
+          //var SetCurF: domain(int);//use domain to keep the current frontier
+          //var SetNextF:domain(int);//use domain to keep the next frontier
+          var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
+          var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
+          //var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
+          //var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
+          SetCurF.add(root);
+          var numCurF=1:int;
+
+          //while (!SetCurF.isEmpty()) {
+          while (numCurF>0) {
+                //writeln("SetCurF=");
+                //writeln(SetCurF);
+                coforall loc in Locales  with (ref SetNextF) {
+                   on loc {
+                       ref srcf=src;
+                       ref df=dst;
+                       ref nf=nei;
+                       ref sf=start_i;
+
+                       ref srcfR=srcR;
+                       ref dfR=dstR;
+                       ref nfR=neiR;
+                       ref sfR=start_iR;
+
+                       var edgeBegin=src.localSubdomain().low;
+                       var edgeEnd=src.localSubdomain().high;
+                       var vertexBegin=src[edgeBegin];
+                       var vertexEnd=src[edgeEnd];
+                       var vertexBeginR=srcR[edgeBegin];
+                       var vertexEndR=srcR[edgeEnd];
+
+                       proc xlocal(x :int, low:int, high:int):bool{
+                                  if (low<=x && x<=high) {
+                                      return true;
+                                  } else {
+                                      return false;
+                                  }
+                       }
+
+                       //var myEle= new set(int,parSafe = true);
+                       //coforall i in SetCurF with (ref myEle) {
+                       //       if ((xlocal(i,vertexBegin,vertexEnd)) || (xlocal(i,vertexBeginR,vertexEndR))) {
+                       //           myEle.add(i);
+                       //       }
+                       //}
+                       //coforall i in myEle with (ref SetNextF) {
+                       coforall i in SetCurF with (ref SetNextF) {
+                              if xlocal(i,vertexBegin,vertexEnd) {// current edge has the vertex
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF){
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              } 
+                              if xlocal(i,vertexBeginR,vertexEndR)  {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF)  {
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              }
+                       }//end coforall
+                   }//end on loc
+                }//end coforall loc
+                cur_level+=1;
+                numCurF=SetNextF.getSize();
+                //numCurF=SetNextF.size;
+                //writeln("SetCurF= ", SetCurF, " SetNextF=", SetNextF, " level ", cur_level+1," numCurf=", numCurF);
+                //numCurF=SetNextF.size;
+                //SetCurF=SetNextF;
+                //SetCurF.clear();
+                SetCurF<=>SetNextF;
+                SetNextF.clear();
+          }//end while  
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          return "success";
+      }//end of bfs_kernel_u
+
+
+
+
       proc return_depth(): string throws{
           var depthName = st.nextName();
           var depthEntry = new shared SymEntry(depth);
@@ -3067,6 +3178,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
               var ag = new owned SegGraphDW(Nv,Ne,Directed,Weighted,srcN,dstN,
                                  startN,neighbourN,vweightN,eweightN, st);
               bfs_kernel(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a);
+              test_bfs_kernel(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a);
               repMsg=return_depth();
 
           } else {
@@ -3076,7 +3188,8 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                       startN,neighbourN,st);
               root=rootN:int;
               depth[root]=0;
-              bfs_kernel(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a);
+              //bfs_kernel(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a);
+              test_bfs_kernel(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a);
               repMsg=return_depth();
           }
       }
@@ -3090,7 +3203,9 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                       vweightN,eweightN, st);
               root=rootN:int;
               depth[root]=0;
-              bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+              //bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+              //             ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a);
+              test_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
                            ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a);
               repMsg=return_depth();
 
@@ -3104,7 +3219,9 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
               root=rootN:int;
               depth[root]=0;
-              bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+              //bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+              //             ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a);
+              test_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
                            ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a);
               repMsg=return_depth();
           }
