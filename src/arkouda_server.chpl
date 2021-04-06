@@ -111,6 +111,7 @@ proc main() {
     serverMessage = "%s %s %s %s %s".format('*',buff,serverMessage,buff,'*');
     
     writeln(boundary);
+    asLogger.info(getModuleName(), getRoutineName(), getLineNumber(), serverMessage);
     writeln(serverMessage);
     writeln(boundary);
     

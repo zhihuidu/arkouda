@@ -3383,15 +3383,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           var vertexBeginG=makeDistArray(numLocales,int);//each locale's beginning vertex ID in src
           var vertexEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
           var HvertexBeginG=makeDistArray(numLocales,int);//each locale's beginning vertex ID in src
-          var HvertexEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
-          var TvertexBeginG=makeDistArray(numLocales,int);//each locale's beginning vertex ID in src
           var TvertexEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
 
           var vertexBeginRG=makeDistArray(numLocales,int);// each locales' beginning vertex ID in srcR
           var vertexEndRG=makeDistArray(numLocales,int);// each locales's ending vertex ID in srcR
           var HvertexBeginRG=makeDistArray(numLocales,int);// each locales' beginning vertex ID in srcR
-          var HvertexEndRG=makeDistArray(numLocales,int);// each locales's ending vertex ID in srcR
-          var TvertexBeginRG=makeDistArray(numLocales,int);// each locales' beginning vertex ID in srcR
           var TvertexEndRG=makeDistArray(numLocales,int);// each locales's ending vertex ID in srcR
 
           var localNum=makeDistArray(numLocales,int);// current locales's local access times
@@ -3458,7 +3454,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           }
 
           proc xremote(x :int, low:int, high:int):bool{
-                     if (low>x || x>high) {
+                     if (low>=x || x>=high) {
                             return true;
                      } else {
                             return false;
@@ -3540,14 +3536,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                                     //localArrayNG[mystart+LPNG[here.id]]=j; 
                                                     //LPNG[here.id]+=1;
                                                     LocalSet.add(j);
-                                                    writeln("4 reverse My locale=", here.id,"Add ", j, "into local");
+                                                    writeln("4 reverse My locale=", here.id,", Add ", j, " into local");
                                                } 
                                                if (xremote(j,HvertexBeginG[here.id],TvertexEndG[here.id]) ||
                                                    xremote(j,HvertexBeginRG[here.id],TvertexEndRG[here.id])) {
                                                     //sendArrayG[mystart+SPG[here.id]]=j;                 
                                                     //SPG[here.id]+=1;
                                                     RemoteSet.add(j);
-                                                    writeln("5 reverse My locale=", here.id,"Add ", j, "into remote");
+                                                    writeln("5 reverse My locale=", here.id,", Add ", j, " into remote");
                                                }
                                          }
                                   }
@@ -3557,6 +3553,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                   remoteNum[here.id]+=RemoteSet.size;
                                   writeln("6-0 My locale=", here.id," there are remote element =",RemoteSet);
                                   coforall localeNum in 0..numLocales-1  { 
+                                       if localeNum != here.id{
                                          var ind=0:int;
                                          //for k in RemoteSet with ( +reduce ind) (var agg= newDstAggregator(int)) {
                                          var agg= newDstAggregator(int); 
@@ -3568,12 +3565,13 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                                                          here.id*CMaxSize+ind] ,k);
                                                      ind+=1;
                                                      
-                                                     writeln("6 My locale=", here.id,"send", k, "to locale= ",localeNum," number=", ind, " send element=", recvArrayG[localeNum*numLocales*CMaxSize+
+                                                     writeln("6 My locale=", here.id,"send", k, " to locale= ",localeNum," number=", ind, " send element=", recvArrayG[localeNum*numLocales*CMaxSize+
                                                                          here.id*CMaxSize+ind-1]);
                                                 }
                                          }
                                          RPG[localeNum*numLocales+here.id]=ind;
                                          ind=0;
+                                       }
                                   }
                               }//end if
                    }//end coforall
@@ -3604,13 +3602,15 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                   on loc {
                    var mystart=here.id*CMaxSize;
                    for i in 0..numLocales-1 {
-                       if (RPG[numLocales*i+here.id]>0) {
-                           localArrayG[mystart+LPG[here.id]-1..mystart+LPG[here.id]+RPG[numLocales*i+here.id]-2]=
-                               recvArrayG[CMaxSize*numLocales*i+here.id*CMaxSize..
-                                          CMaxSize*numLocales*i+here.id*CMaxSize+RPG[numLocales*i+here.id]-1];
-                           LPG[here.id]=LPG[here.id]+RPG[numLocales*i+here.id];
+                     if i != here.id {
+                       if (RPG[here.id*numLocales+i]>0) {
+                           localArrayG[mystart+LPG[here.id]-1..mystart+LPG[here.id]+RPG[numLocales*here.id+i]-2]=
+                               recvArrayG[CMaxSize*numLocales*here.id+i*CMaxSize..
+                                          CMaxSize*numLocales*here.id+i*CMaxSize+RPG[numLocales*here.id+i]-1];
+                           LPG[here.id]=LPG[here.id]+RPG[numLocales*here.id+i];
                            writeln("8 My locale=", here.id," after colloect array=",localArrayG[mystart..mystart+LPG[here.id]-1]);
                        }
+                     }
                          
                    }
                   }//end on loc
