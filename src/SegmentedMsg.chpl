@@ -3492,7 +3492,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                               } 
                        
                               if (RemoteSet.size>0) {//there is vertex to be sent
-                                  remoteNum[here.id]+=RemoteSet.size*2;
+                                  remoteNum[here.id]+=RemoteSet.size;
                                   coforall localeNum in 0..numLocales-1  { 
                                        if localeNum != here.id{
                                          var ind=0:int;
@@ -3515,10 +3515,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                   }
                               }//end if
                    }//end coforall
+                   localNum[here.id]+=LPG[here.id];
                    LPG[here.id]=0;
                    if LocalSet.size>0 {
                        LPG[here.id]=LocalSet.size;
-                       localNum[here.id]+=LocalSet.size*2;
+                       localNum[here.id]+=LocalSet.size;
                        var mystart=here.id*CMaxSize;
                        forall (a,b)  in zip (localArrayG[mystart..mystart+LocalSet.size-1],LocalSet.toArray()) {
                               a=b;
@@ -3744,7 +3745,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                               }
                        
                               if (RemoteSet.size>0) {//there is vertex to be sent
-                                  remoteNum[here.id]+=RemoteSet.size*2;
+                                  remoteNum[here.id]+=RemoteSet.size;
                                   coforall localeNum in 0..numLocales-1  { 
                                        if localeNum != here.id{
                                          var ind=0:int;
@@ -3768,10 +3769,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                   }
                               }//end if
                    }//end coforall
+                   localNum[here.id]+=LPG[here.id];
                    LPG[here.id]=0;
                    if LocalSet.size>0 {
                        LPG[here.id]=LocalSet.size;
-                       localNum[here.id]+=LocalSet.size*2;
+                       localNum[here.id]+=LocalSet.size;
                        var mystart=here.id*CMaxSize;
                        forall (a,b)  in zip (localArrayG[mystart..mystart+LocalSet.size-1],LocalSet.toArray()) {
                               a=b;
@@ -4006,7 +4008,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
               depth[root]=0;
               var ag = new owned SegGraphDW(Nv,Ne,Directed,Weighted,srcN,dstN,
                                  startN,neighbourN,vweightN,eweightN, st);
-              _d1_bfs_kernel(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a);
+              test_bfs_kernel(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a);
               repMsg=return_depth();
 
           } else {
@@ -4016,7 +4018,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                       startN,neighbourN,st);
               root=rootN:int;
               depth[root]=0;
-              _d1_bfs_kernel(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a);
+              test_bfs_kernel(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a);
               repMsg=return_depth();
           }
       }
@@ -4032,7 +4034,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
               depth[root]=0;
               //bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
               //             ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a);
-              _d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+              test_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
                            ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a);
               repMsg=return_depth();
 
@@ -4048,7 +4050,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
               depth[root]=0;
               //bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
               //             ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a);
-              _d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+              test_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
                            ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a);
               repMsg=return_depth();
           }
