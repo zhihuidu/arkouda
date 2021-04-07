@@ -3506,12 +3506,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                                      //                    here.id*CMaxSize+ind]=k;
                                                      ind+=1;
                                                      
-                                                                         here.id*CMaxSize+ind-1]);
                                                 }
                                          }
                                          agg.flush();
                                          RPG[localeNum*numLocales+here.id]=ind;
-                                         localeNum*numLocales*CMaxSize+ here.id*CMaxSize+ind-1]);
                                          ind=0;
                                        }
                                   }
@@ -3541,7 +3539,6 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            recvArrayG[CMaxSize*numLocales*here.id+i*CMaxSize..
                                       CMaxSize*numLocales*here.id+i*CMaxSize+RPG[numLocales*here.id+i]-1];
                            LPG[here.id]=LPG[here.id]+RPG[numLocales*here.id+i];
-                                      CMaxSize*numLocales*here.id+i*CMaxSize+RPG[numLocales*here.id+i]-1]);
                        }
                      }
                          
@@ -3762,12 +3759,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                                      //                    here.id*CMaxSize+ind]=k;
                                                      ind+=1;
                                                      
-                                                                         here.id*CMaxSize+ind-1]);
                                                 }
                                          }
                                          agg.flush();
                                          RPG[localeNum*numLocales+here.id]=ind;
-                                         localeNum*numLocales*CMaxSize+ here.id*CMaxSize+ind-1]);
                                          ind=0;
                                        }
                                   }
@@ -3797,7 +3792,6 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            recvArrayG[CMaxSize*numLocales*here.id+i*CMaxSize..
                                       CMaxSize*numLocales*here.id+i*CMaxSize+RPG[numLocales*here.id+i]-1];
                            LPG[here.id]=LPG[here.id]+RPG[numLocales*here.id+i];
-                                      CMaxSize*numLocales*here.id+i*CMaxSize+RPG[numLocales*here.id+i]-1]);
                        }
                      }
                          
