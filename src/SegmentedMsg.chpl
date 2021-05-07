@@ -4042,6 +4042,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       proc fo_d1_bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
                         neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int,GivenRatio:real):string throws{
           var cur_level=0;
+          var cur_level=0;
           var numCurF=1:int;//flag for stopping loop
 
 
@@ -4052,6 +4053,8 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           var vertexEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
           var HvertexBeginG=makeDistArray(numLocales,int);//each locale's beginning vertex ID in src
           var TvertexEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
+          var BoundBeginG=makeDistArray(numLocales,int);//each locale's beginning vertex ID in src
+          var BoundEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
 
           var vertexBeginRG=makeDistArray(numLocales,int);// each locales' beginning vertex ID in srcR
           var vertexEndRG=makeDistArray(numLocales,int);// each locales's ending vertex ID in srcR
@@ -4074,19 +4077,28 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                  vertexBeginRG[here.id]=srcR[edgeBeginG[here.id]];
                  vertexEndRG[here.id]=srcR[edgeEndG[here.id]];
+
+                 BoundBeginG[here.id]=vertexBeginG[here.id];
+                 BoundEndG[here.id]=vertexEndG[here.id];
+
                  if (here.id>0) {
                    HvertexBeginG[here.id]=vertexEndG[here.id-1];
                    HvertexBeginRG[here.id]=vertexEndRG[here.id-1];
+                   BoundBeginG[here.id]=min(vertexEndG[here.id-1]+1,nei.size-1);
+              
                  } else {
                    HvertexBeginG[here.id]=-1;
                    HvertexBeginRG[here.id]=-1;
+                   BoundBeginG[here.id]=0;
                  }
                  if (here.id<numLocales-1) {
                    TvertexEndG[here.id]=vertexBeginG[here.id+1];
                    TvertexEndRG[here.id]=vertexBeginRG[here.id+1];
+                   BoundEndG[here.id]=max(BoundBeginG[here.id+1]-1,0);
                  } else {
                    TvertexEndG[here.id]=nei.size;
                    TvertexEndRG[here.id]=nei.size;
+                   BoundEndG[here.id]=nei.size-1;
                  }
 
                  MaxBufSize[here.id]=vertexEndG[here.id]-vertexBeginG[here.id]+
@@ -4162,7 +4174,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
 
                    var   switchratio=(numCurF:real)/nf.size:real;
-                   if (switchratio<GivenRatio+1) {//top down
+                   if (switchratio<GivenRatio) {//top down
 
                        forall i in localArrayG[mystart..mystart+LPG[here.id]-1] 
                                                    with (ref LocalSet, ref RemoteSet)  {
@@ -4198,7 +4210,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                   var nextStart=max(edgeId,edgeBeginG[here.id]);
                                   var nextEnd=min(edgeEndG[here.id],edgeId+numNF-1);
                                   ref NF=dfR[nextStart..nextEnd];
-                                  forall j in NF with (ref LocalSet, ref RemoteSet) {
+                                  coforall j in NF with (ref LocalSet, ref RemoteSet) {
                                          if (depth[j]==-1) {
                                                depth[j]=cur_level+1;
                                                if (xlocal(j,vertexBeginG[here.id],vertexEndG[here.id]) ||
@@ -4245,8 +4257,90 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                    }// end of top down
                    else {  //bottom up
 
-                   }
+                       proc FrontierHas(x:int):bool{
+                            var returnval=false;
+                            coforall i in 0..numLocales-1 with (ref returnval) {
+                                if (xlocal(x,vertexBeginG[i],vertexEndG[i]) ||
+                                    xlocal(x,vertexBeginRG[i],vertexEndRG[i])) {
+                                    var mystart=i*CMaxSize;
+                                    forall j in localArrayG[mystart..mystart+LPG[i]-1] with (ref returnval){
+                                         if j==x {
+                                            returnval=true;
+                                         }
+                                    }
+                                }
+                            }
+                            return returnval;
+                       }
 
+                       forall i in BoundBeginG[here.id]..BoundEndG[here.id]
+                                                   with (ref LocalSet, ref RemoteSet)  {
+                          if (depth[i]==-1) {
+                              if xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) {
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBeginG[here.id]);
+                                  var nextEnd=min(edgeEndG[here.id],edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  coforall j in NF with (ref LocalSet, ref RemoteSet) {
+                                         if FrontierHas(j) {
+                                               depth[i]=cur_level+1;
+                                               if (xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) ||
+                                                   xlocal(i,vertexBeginRG[here.id],vertexEndRG[here.id])) {
+                                                    LocalSet.add(i);
+                                               } 
+                                               if (xremote(i,HvertexBeginG[here.id],TvertexEndG[here.id]) ||
+                                                   xremote(i,HvertexBeginRG[here.id],TvertexEndRG[here.id])) {
+                                                    RemoteSet.add(i);
+                                               }
+                                         }
+                                  }
+                              } 
+                              if xlocal(i,vertexBeginRG[here.id],vertexEndRG[here.id])  {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBeginG[here.id]);
+                                  var nextEnd=min(edgeEndG[here.id],edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  coforall j in NF with (ref LocalSet, ref RemoteSet) {
+                                         if FrontierHas(j) {
+                                               depth[i]=cur_level+1;
+                                               if (xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) ||
+                                                   xlocal(i,vertexBeginRG[here.id],vertexEndRG[here.id])) {
+                                                    LocalSet.add(i);
+                                               } 
+                                               if (xremote(i,HvertexBeginG[here.id],TvertexEndG[here.id]) ||
+                                                   xremote(i,HvertexBeginRG[here.id],TvertexEndRG[here.id])) {
+                                                    RemoteSet.add(i);
+                                               }
+                                         }
+                                  }
+                              }
+                       
+                              if (RemoteSet.size>0) {//there is vertex to be sent
+                                  remoteNum[here.id]+=RemoteSet.size;
+                                  coforall localeNum in 0..numLocales-1  { 
+                                       if localeNum != here.id{
+                                         var ind=0:int;
+                                         var agg= newDstAggregator(int); 
+                                         for k in RemoteSet {
+                                                if (xlocal(k,vertexBeginG[localeNum],vertexEndG[localeNum])||
+                                                    xlocal(k,vertexBeginRG[localeNum],vertexEndRG[localeNum])){
+                                                     agg.copy(recvArrayG[localeNum*numLocales*CMaxSize+
+                                                                         here.id*CMaxSize+ind] ,k);
+                                                     ind+=1;
+                                                     
+                                                }
+                                         }
+                                         agg.flush();
+                                         RPG[localeNum*numLocales+here.id]=ind;
+                                         ind=0;
+                                       }
+                                  }
+                              }//end if
+                          } //end if (depth[i]==-1)
+                       }//end coforall
+                   }
 
                    localNum[here.id]+=LPG[here.id];
                    LPG[here.id]=0;
@@ -4302,7 +4396,8 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           }
           writeln("Local Ratio=", (TotalLocal):real/(TotalLocal+TotalRemote):real,"Total Local Access=",TotalLocal," , Total Remote Access=",TotalRemote);
           return "success";
-      }//end of co_d1_bfs_kernel_u
+      }//end of fo_d1_bfs_kernel_u
+
 
       proc co_bag_bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
                         neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int, 
