@@ -1113,42 +1113,43 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
         """
         cmd="segmentedGraphBFS"
         #if (cast(int,graph.directed)!=0)  :
+        DefaultRatio=0.75111
         if (int(graph.directed)>0)  :
             if (int(graph.weighted)==0):
               # directed unweighted GraphD
               #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {}".format(
-              args = "{} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {}".format(
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
                  graph.start_i.name,graph.neighbour.name,\
-                 root)
+                 root,DefaultRatio)
             else:
               # directed weighted GraphDW
               #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {}".format(
-              args = "{} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {} {}".format(
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
                  graph.start_i.name,graph.neighbour.name,\
                  graph.v_weight.name,graph.e_weight.name,\
-                 root)
+                 root,DefaultRatio)
         else:
             if (int(graph.weighted)==0):
               # undirected unweighted GraphUD
               #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
-              args = "{} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
                  graph.start_i.name,graph.neighbour.name,\
                  graph.srcR.name,graph.dstR.name,\
                  graph.start_iR.name,graph.neighbourR.name,\
-                 root)
+                 root,DefaultRatio)
             else:
               # undirected weighted GraphUDW 15
               #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
-              args = "{} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
@@ -1156,7 +1157,7 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
                  graph.srcR.name,graph.dstR.name,\
                  graph.start_iR.name,graph.neighbourR.name,\
                  graph.v_weight.name,graph.e_weight.name,\
-                 root)
+                 root,DefaultRatio)
 
         #repMsg = generic_msg(msg)
         repMsg = generic_msg(cmd=cmd,args=args)

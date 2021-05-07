@@ -2799,6 +2799,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
   //proc segBFSMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
   proc segBFSMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       var repMsg: string;
+      var DefaultRatio=0.75111;
       //var (n_verticesN,n_edgesN,directedN,weightedN,srcN, dstN, startN, neighbourN,vweightN,eweightN, rootN )
       //    = payload.decode().splitMsgToTuple(10);
       var (n_verticesN,n_edgesN,directedN,weightedN,restpart )
@@ -3154,220 +3155,6 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
 
 
-
-
-
-
-
-      proc _develop_bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
-                        neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int):string throws{// this version have bugs
-          var cur_level=0;
-          var numCurF=1:int;//flag for stopping loop
-
-
-          var edgeBeginG=makeDistArray(numLocales,int);//each locale's starting edge ID
-          var edgeEndG=makeDistArray(numLocales,int);//each locales'ending edge ID
-
-          var vertexBeginG=makeDistArray(numLocales,int);//each locale's beginning vertex ID in src
-          var vertexEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
-
-          var vertexBeginRG=makeDistArray(numLocales,int);// each locales' beginning vertex ID in srcR
-          var vertexEndRG=makeDistArray(numLocales,int);// each locales's ending vertex ID in srcR
-
-          var MaxBufSize=makeDistArray(numLocales,int);//temp array to calculate global max
-          coforall loc in Locales   {
-              on loc {
-                 edgeBeginG[here.id]=src.localSubdomain().low;
-                 edgeEndG[here.id]=src.localSubdomain().high;
-
-                 vertexBeginG[here.id]=src[edgeBeginG[here.id]];
-                 vertexEndG[here.id]=src[edgeEndG[here.id]];
-
-                 vertexBeginRG[here.id]=srcR[edgeBeginG[here.id]];
-                 vertexEndRG[here.id]=srcR[edgeEndG[here.id]];
-
-                 MaxBufSize[here.id]=vertexEndG[here.id]-vertexBeginG[here.id]+
-                                     vertexEndRG[here.id]-vertexBeginRG[here.id]+2;
-              }
-          }
-          var CMaxSize=1: int;
-          for i in 0..numLocales-1 {
-              if   MaxBufSize[i]> CMaxSize {
-                   CMaxSize=MaxBufSize[i];
-              }
-          }
-          var localArrayG=makeDistArray(numLocales*CMaxSize,int);//current frontier elements
-          var localArrayNG=makeDistArray(numLocales*CMaxSize,int);// next frontier in the same locale
-          var sendArrayG=makeDistArray(numLocales*CMaxSize,int);// next frontier in other locales
-          var recvArrayG=makeDistArray(numLocales*numLocales*CMaxSize,int);//hold the current frontier elements
-          var LPG=makeDistArray(numLocales,int);// frontier pointer to current position
-          var LPNG=makeDistArray(numLocales,int);// next frontier pointer to current position
-          var SPG=makeDistArray(numLocales,int);// receive buffer
-          var RPG=makeDistArray(numLocales*numLocales,int);//pointer to the current position can receive element
-          LPG=0;
-          LPNG=0;
-          SPG=0;
-          RPG=0;
-
-          proc xlocal(x :int, low:int, high:int):bool{
-                     if (low<=x && x<=high) {
-                            return true;
-                     } else {
-                            return false;
-                     }
-          }
-
-          coforall loc in Locales   {
-              on loc {
-                 if (xlocal(root,vertexBeginG[here.id],vertexEndG[here.id]) || 
-                                 xlocal(root,vertexBeginRG[here.id],vertexEndRG[here.id])) {
-                   localArrayG[CMaxSize*here.id+LPG[here.id]]=root;
-                   LPG[here.id]+=1;
-                 }
-              }
-          }
-          while numCurF >0 {
-              coforall loc in Locales   {
-                  on loc {
-                   ref srcf=src;
-                   ref df=dst;
-                   ref nf=nei;
-                   ref sf=start_i;
-
-                   ref srcfR=srcR;
-                   ref dfR=dstR;
-                   ref nfR=neiR;
-                   ref sfR=start_iR;
-
-
-                   //var aggdst= newDstAggregator(int);
-                   //var aggsrc= newSrcAggregator(int);
-
-                   var mystart=here.id*CMaxSize;
-                   coforall i in localArrayG[mystart..mystart+LPG[here.id]-1]  {
-                              if xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) {// current edge has the vertex
-                                  var    numNF=nf[i];
-                                  var    edgeId=sf[i];
-                                  var nextStart=max(edgeId,edgeBeginG[here.id]);
-                                  var nextEnd=min(edgeEndG[here.id],edgeId+numNF-1);
-                                  ref NF=df[nextStart..nextEnd];
-                                  forall j in NF {
-                                         if (depth[j]==-1) {
-                                               depth[j]=cur_level+1;
-                                               if (xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) ||
-                                                  xlocal(i,vertexBeginRG[here.id],vertexEndRG[here.id])) {
-                                                    localArrayNG[mystart+LPNG[here.id]]=j; 
-                                                    LPNG[here.id]+=1;
-                                               } 
-                                               else {
-                                                    sendArrayG[mystart+SPG[here.id]]=j;                 
-                                                    SPG[here.id]+=1;
-                                               }
-                                         }
-                                  }
-                              } 
-                              if xlocal(i,vertexBeginRG[here.id],vertexEndRG[here.id])  {
-                                  var    numNF=nfR[i];
-                                  var    edgeId=sfR[i];
-                                  var nextStart=max(edgeId,edgeBeginG[here.id]);
-                                  var nextEnd=min(edgeEndG[here.id],edgeId+numNF-1);
-                                  ref NF=dfR[nextStart..nextEnd];
-                                  forall j in NF {
-                                         if (depth[j]==-1) {
-                                               depth[j]=cur_level+1;
-                                               if (xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) ||
-                                                  xlocal(i,vertexBeginRG[here.id],vertexEndRG[here.id])) {
-                                                    localArrayNG[mystart+LPNG[here.id]]=j; 
-                                                    LPNG[here.id]+=1;
-                                               } 
-                                               else {
-                                                    sendArrayG[mystart+SPG[here.id]]=j;                 
-                                                    SPG[here.id]+=1;
-                                               }
-                                         }
-                                  }
-                              }
-                       
-                              if (SPG[here.id]>0) {//there is vertex to be sent
-                                  if SPG[here.id]>1 {
-                                     sort(sendArrayG[mystart..mystart+SPG[here.id]-1]);
-                                     var oldnum=SPG[here.id];
-                                     var i=oldnum-1:int;
-                                     while ( i>=1) {// remove duplicated vertices
-                                        if sendArrayG[mystart+i]==sendArrayG[mystart+i-1] {
-                                           SPG[here.id]-=1;
-                                           if (i<SPG[here.id]) {
-                                              var tmp=sendArrayG[mystart+i..mystart+SPG[here.id]];
-                                              sendArrayG[mystart+i-1..mystart+SPG[here.id]-1]=tmp;
-                                           }
-                                        } 
-                                        i-=1;
-                                     }
-                                  }
-                                  for k in 0..SPG[here.id]-1  {//move data from send array to recv array
-                                         forall localeNum in 0..numLocales-1  { 
-                                             if (xlocal(k,vertexBeginG[localeNum],vertexEndG[localeNum])||
-                                                 xlocal(k,vertexBeginG[localeNum],vertexEndG[localeNum])){
-                                                 recvArrayG[mystart*numLocales+
-                                                            localeNum*CMaxSize+
-                                                            RPG[localeNum+numLocales*here.id]]=k;
-                                                 RPG[localeNum+numLocales*here.id]+=1;
-
-                                             }
-                                         }
-                                  }
-                              }//end if
-                   }//end coforall
-                  }//end on loc
-              }//end coforall loc
-              numCurF=0;
-              coforall loc in Locales with (ref numCurF) {
-                  on loc {
-                   LPG[here.id]=0;
-                   var mystart=here.id*CMaxSize;
-                   if (LPNG[here.id]>0) {// first collect vertices in my locales
-                           localArrayG[mystart..mystart+LPNG[here.id]-1]=
-                              localArrayNG[mystart..mystart+LPNG[here.id]-1];
-                           LPG[here.id]=LPNG[here.id];
-                           numCurF=1;
-                           LPNG[here.id]=0;
-                   }
-                   for i in 0..numLocales-1 {
-                       if (RPG[numLocales*i+here.id]>0) {
-                           localArrayG[mystart+LPNG[here.id]..mystart+LPNG[here.id]+RPG[numLocales*i+here.id]-2]=
-                               recvArrayG[CMaxSize*numLocales*i+here.id*CMaxSize..
-                                          CMaxSize*numLocales*i+here.id*CMaxSize+RPG[numLocales*i+here.id]-1];
-                           numCurF=1;
-                           LPG[here.id]=LPG[here.id]+RPG[numLocales*i+here.id];
-                           RPG[numLocales*i+here.id]=0;
-                       }
-                   }
-                   if LPG[here.id]>0 {
-                       sort(localArrayG[mystart..mystart+SPG[here.id]-1]);
-                       var oldnum=LPG[here.id];
-                       for i in 1..oldnum-1 {// remove duplicated vertices
-                             if localArrayG[mystart+i]==localArrayG[mystart+i-1] {
-                                var tmp=localArrayG[mystart+i+1..mystart+LPG[here.id]-1];
-                                LPG[here.id]-=1;
-                                localArrayG[mystart+i..mystart+LPG[here.id]-1]=tmp;
-                             }
-                       }
-
-                   }
-                  }//end on loc
-              }//end coforall loc
-              cur_level+=1;
-          }//end while  
-          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
-          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
-          writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
-          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
-          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
-          return "success";
-      }//end of bfs_kernel_u
-
-
-
       proc _d1_bfs_kernel(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int):string throws{
           var cur_level=0;
           var numCurF=1:int;//flag for stopping loop
@@ -3379,7 +3166,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           var vertexBeginG=makeDistArray(numLocales,int);//each locale's beginning vertex ID in src
           var vertexEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
           var HvertexBeginG=makeDistArray(numLocales,int);//each locale's beginning vertex ID in src
+          var HvertexEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
+          var TvertexBeginG=makeDistArray(numLocales,int);//each locale's beginning vertex ID in src
           var TvertexEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
+
 
           var localNum=makeDistArray(numLocales,int);// current locales's local access times
           var remoteNum=makeDistArray(numLocales,int);// current locales's remote access times
@@ -3406,7 +3196,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                    TvertexEndG[here.id]=nei.size;
                  }
 
-                 MaxBufSize[here.id]=vertexEndG[here.id]-vertexBeginG[here.id]+ 1;
+                 MaxBufSize[here.id]=vertexEndG[here.id]-vertexBeginG[here.id]+1;
               }
           }
           var CMaxSize=1: int;
@@ -3415,6 +3205,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                    CMaxSize=MaxBufSize[i];
               }
           }
+          writeln("CMaxSize=",CMaxSize);
           var localArrayG=makeDistArray(numLocales*CMaxSize,int);//current frontier elements
           //var localArrayNG=makeDistArray(numLocales*CMaxSize,int);// next frontier in the same locale
           //var sendArrayG=makeDistArray(numLocales*CMaxSize,int);// next frontier in other locales
@@ -3448,6 +3239,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                  if (xlocal(root,vertexBeginG[here.id],vertexEndG[here.id]) ) {
                    localArrayG[CMaxSize*here.id]=root;
                    LPG[here.id]=1;
+                   writeln("1 Add root=",root," into locale ",here.id);
                  }
               }
           }
@@ -3460,11 +3252,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                    ref nf=nei;
                    ref sf=start_i;
 
+                   //var aggdst= newDstAggregator(int);
+                   //var aggsrc= newSrcAggregator(int);
                    var LocalSet= new set(int,parSafe = true);//use set to keep the next local frontier, 
                                                              //vertex in src or srcR
                    var RemoteSet=new set(int,parSafe = true);//use set to keep the next remote frontier
 
                    var mystart=here.id*CMaxSize;//start index 
+                   writeln("1-1 my locale=",here.id, ",has ", LPG[here.id], " elements=",localArrayG[mystart..mystart+LPG[here.id]-1],",startposition=",mystart);
                    coforall i in localArrayG[mystart..mystart+LPG[here.id]-1] with (ref LocalSet, ref RemoteSet)  {
                             // each locale just processes its local vertices
                               if xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) {
@@ -3477,15 +3272,17 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                   coforall j in NF with (ref LocalSet, ref RemoteSet) {
                                          if (depth[j]==-1) {
                                                depth[j]=cur_level+1;
-                                               if xlocal(j,vertexBeginG[here.id],vertexEndG[here.id]){ 
+                                               if (xlocal(j,vertexBeginG[here.id],vertexEndG[here.id])) {
                                                     //localArrayNG[mystart+LPNG[here.id]]=j; 
                                                     //LPNG[here.id]+=1;
                                                     LocalSet.add(j);
+                                                    writeln("2 My locale=", here.id," Add ", j, " into local");
                                                } 
-                                               if xremote(j,HvertexBeginG[here.id],TvertexEndG[here.id]) {
+                                               if (xremote(j,HvertexBeginG[here.id],TvertexEndG[here.id])) {
                                                     //sendArrayG[mystart+SPG[here.id]]=j;                 
                                                     //SPG[here.id]+=1;
                                                     RemoteSet.add(j);
+                                                    writeln("3 My locale=", here.id," Add ", j, " into remote");
                                                }
                                          }
                                   }
@@ -3493,37 +3290,44 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        
                               if (RemoteSet.size>0) {//there is vertex to be sent
                                   remoteNum[here.id]+=RemoteSet.size;
+                                  writeln("6-0 My locale=", here.id," there are remote element =",RemoteSet);
                                   coforall localeNum in 0..numLocales-1  { 
-                                       if localeNum != here.id{
                                          var ind=0:int;
                                          //for k in RemoteSet with ( +reduce ind) (var agg= newDstAggregator(int)) {
                                          var agg= newDstAggregator(int); 
                                          for k in RemoteSet {
-                                                if xlocal(k,vertexBeginG[localeNum],vertexEndG[localeNum]){
+                                                writeln("6-2 My locale=", here.id," test remote element ", k);
+                                                if (xlocal(k,vertexBeginG[localeNum],vertexEndG[localeNum])){
                                                      agg.copy(recvArrayG[localeNum*numLocales*CMaxSize+
                                                                          here.id*CMaxSize+ind] ,k);
-                                                     //recvArrayG[localeNum*numLocales*CMaxSize+
-                                                     //                    here.id*CMaxSize+ind]=k;
                                                      ind+=1;
                                                      
+                                                     writeln("6 My locale=", here.id,"send", k, "to locale= ",localeNum," number=", ind, " send element=", recvArrayG[localeNum*numLocales*CMaxSize+
+                                                                         here.id*CMaxSize+ind-1]);
                                                 }
                                          }
-                                         agg.flush();
                                          RPG[localeNum*numLocales+here.id]=ind;
                                          ind=0;
-                                       }
                                   }
                               }//end if
                    }//end coforall
-                   localNum[here.id]+=LPG[here.id];
                    LPG[here.id]=0;
                    if LocalSet.size>0 {
                        LPG[here.id]=LocalSet.size;
                        localNum[here.id]+=LocalSet.size;
                        var mystart=here.id*CMaxSize;
                        forall (a,b)  in zip (localArrayG[mystart..mystart+LocalSet.size-1],LocalSet.toArray()) {
+                              writeln("7-0 My locale=", here.id,"  a=",a, " b=",b);
                               a=b;
                        }
+                       var tmp=0;
+                       for i in LocalSet {
+                              writeln("7-1 My locale=", here.id,"  element i=",i," tmp=",tmp);
+                              //localArrayG[mystart+tmp]=i;
+                              writeln("7-2 My locale=", here.id,"  local array [tmp]=",localArrayG[mystart+tmp]," tmp=",tmp);
+                              tmp+=1;
+                       }
+                       writeln("7 My locale=", here.id,"  local set=",LocalSet, "to local array and size= ",LocalSet.size, " local array=",localArrayG[mystart..mystart+LocalSet.size-1]);
                    }
                    LocalSet.clear();
                    RemoteSet.clear();
@@ -3534,27 +3338,29 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                   on loc {
                    var mystart=here.id*CMaxSize;
                    for i in 0..numLocales-1 {
-                     if i != here.id {
-                       if (RPG[here.id*numLocales+i]>0) {
-                           localArrayG[mystart+LPG[here.id]..mystart+LPG[here.id]+RPG[numLocales*here.id+i]-1]=
-                           recvArrayG[CMaxSize*numLocales*here.id+i*CMaxSize..
-                                      CMaxSize*numLocales*here.id+i*CMaxSize+RPG[numLocales*here.id+i]-1];
-                           LPG[here.id]=LPG[here.id]+RPG[numLocales*here.id+i];
+                       if (RPG[numLocales*i+here.id]>0) {
+                           localArrayG[mystart+LPG[here.id]-1..mystart+LPG[here.id]+RPG[numLocales*i+here.id]-2]=
+                               recvArrayG[CMaxSize*numLocales*i+here.id*CMaxSize..
+                                          CMaxSize*numLocales*i+here.id*CMaxSize+RPG[numLocales*i+here.id]-1];
+                           LPG[here.id]=LPG[here.id]+RPG[numLocales*i+here.id];
+                           writeln("8 My locale=", here.id," after colloect array=",localArrayG[mystart..mystart+LPG[here.id]-1]);
                        }
-                     }
                          
                    }
                   }//end on loc
               }//end coforall loc
               numCurF=0;
+              writeln("10-0 LPG=",LPG);
               for iL in 0..(numLocales-1)  {
                    if LPG[iL] >0 {
+                       writeln("10  locale ",iL, " has ",LPG[iL], " elements");
                        numCurF=1;
                        break;
                    }
               }
               RPG=0;
               cur_level+=1;
+              writeln("cur level=",cur_level);
           }//end while  
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
@@ -3569,12 +3375,672 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           }
           writeln("Local Ratio=", (TotalLocal):real/(TotalLocal+TotalRemote):real,"Total Local Access=",TotalLocal," , Total Remote Access=",TotalRemote);
           return "success";
-      }//end of bfs_kernel_u
-
+      }//end of_d1_bfs_kernel
 
 
       proc _d1_bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
                         neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int):string throws{
+          var cur_level=0;
+          var numCurF=1:int;//flag for stopping loop
+
+
+          var edgeBeginG=makeDistArray(numLocales,int);//each locale's starting edge ID
+          var edgeEndG=makeDistArray(numLocales,int);//each locales'ending edge ID
+
+          var vertexBeginG=makeDistArray(numLocales,int);//each locale's beginning vertex ID in src
+          var vertexEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
+          var HvertexBeginG=makeDistArray(numLocales,int);//each locale's beginning vertex ID in src
+          var HvertexEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
+          var TvertexBeginG=makeDistArray(numLocales,int);//each locale's beginning vertex ID in src
+          var TvertexEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
+
+          var vertexBeginRG=makeDistArray(numLocales,int);// each locales' beginning vertex ID in srcR
+          var vertexEndRG=makeDistArray(numLocales,int);// each locales's ending vertex ID in srcR
+          var HvertexBeginRG=makeDistArray(numLocales,int);// each locales' beginning vertex ID in srcR
+          var HvertexEndRG=makeDistArray(numLocales,int);// each locales's ending vertex ID in srcR
+          var TvertexBeginRG=makeDistArray(numLocales,int);// each locales' beginning vertex ID in srcR
+          var TvertexEndRG=makeDistArray(numLocales,int);// each locales's ending vertex ID in srcR
+
+          var localNum=makeDistArray(numLocales,int);// current locales's local access times
+          var remoteNum=makeDistArray(numLocales,int);// current locales's remote access times
+          localNum=0;
+          remoteNum=0;
+
+          var MaxBufSize=makeDistArray(numLocales,int);//temp array to calculate global max
+          coforall loc in Locales   {
+              on loc {
+                 edgeBeginG[here.id]=src.localSubdomain().low;
+                 edgeEndG[here.id]=src.localSubdomain().high;
+
+                 vertexBeginG[here.id]=src[edgeBeginG[here.id]];
+                 vertexEndG[here.id]=src[edgeEndG[here.id]];
+
+                 vertexBeginRG[here.id]=srcR[edgeBeginG[here.id]];
+                 vertexEndRG[here.id]=srcR[edgeEndG[here.id]];
+                 if (here.id>0) {
+                   HvertexBeginG[here.id]=vertexEndG[here.id-1];
+                   HvertexBeginRG[here.id]=vertexEndRG[here.id-1];
+                 } else {
+                   HvertexBeginG[here.id]=-1;
+                   HvertexBeginRG[here.id]=-1;
+                 }
+                 if (here.id<numLocales-1) {
+                   TvertexEndG[here.id]=vertexBeginG[here.id+1];
+                   TvertexEndRG[here.id]=vertexBeginRG[here.id+1];
+                 } else {
+                   TvertexEndG[here.id]=nei.size;
+                   TvertexEndRG[here.id]=nei.size;
+                 }
+
+                 MaxBufSize[here.id]=vertexEndG[here.id]-vertexBeginG[here.id]+
+                                     vertexEndRG[here.id]-vertexBeginRG[here.id]+2;
+              }
+          }
+          var CMaxSize=1: int;
+          for i in 0..numLocales-1 {
+              if   MaxBufSize[i]> CMaxSize {
+                   CMaxSize=MaxBufSize[i];
+              }
+          }
+          writeln("CMaxSize=",CMaxSize);
+          var localArrayG=makeDistArray(numLocales*CMaxSize,int);//current frontier elements
+          //var localArrayNG=makeDistArray(numLocales*CMaxSize,int);// next frontier in the same locale
+          //var sendArrayG=makeDistArray(numLocales*CMaxSize,int);// next frontier in other locales
+          var recvArrayG=makeDistArray(numLocales*numLocales*CMaxSize,int);//hold the current frontier elements
+          var LPG=makeDistArray(numLocales,int);// frontier pointer to current position
+          //var LPNG=makeDistArray(numLocales,int);// next frontier pointer to current position
+          //var SPG=makeDistArray(numLocales,int);// receive buffer
+          var RPG=makeDistArray(numLocales*numLocales,int);//pointer to the current position can receive element
+          LPG=0;
+          //LPNG=0;
+          //SPG=0;
+          RPG=0;
+
+          proc xlocal(x :int, low:int, high:int):bool{
+                     if (low<=x && x<=high) {
+                            return true;
+                     } else {
+                            return false;
+                     }
+          }
+
+          proc xremote(x :int, low:int, high:int):bool{
+                     if (low>=x || x>=high) {
+                            return true;
+                     } else {
+                            return false;
+                     }
+          }
+          coforall loc in Locales   {
+              on loc {
+                 if (xlocal(root,vertexBeginG[here.id],vertexEndG[here.id]) || 
+                                 xlocal(root,vertexBeginRG[here.id],vertexEndRG[here.id])) {
+                   localArrayG[CMaxSize*here.id]=root;
+                   LPG[here.id]=1;
+                   writeln("1 Add root=",root," into locale ",here.id);
+                 }
+              }
+          }
+
+          while numCurF >0 {
+              coforall loc in Locales   {
+                  on loc {
+                   ref srcf=src;
+                   ref df=dst;
+                   ref nf=nei;
+                   ref sf=start_i;
+
+                   ref srcfR=srcR;
+                   ref dfR=dstR;
+                   ref nfR=neiR;
+                   ref sfR=start_iR;
+
+
+                   //var aggdst= newDstAggregator(int);
+                   //var aggsrc= newSrcAggregator(int);
+                   var LocalSet= new set(int,parSafe = true);//use set to keep the next local frontier, 
+                                                             //vertex in src or srcR
+                   var RemoteSet=new set(int,parSafe = true);//use set to keep the next remote frontier
+
+                   var mystart=here.id*CMaxSize;//start index 
+                   writeln("1-1 my locale=",here.id, ",has ", LPG[here.id], " elements=",localArrayG[mystart..mystart+LPG[here.id]-1],",startposition=",mystart);
+                   coforall i in localArrayG[mystart..mystart+LPG[here.id]-1] with (ref LocalSet, ref RemoteSet)  {
+                            // each locale just processes its local vertices
+                              if xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) {
+                                  // i in src, current edge has the vertex
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBeginG[here.id]);
+                                  var nextEnd=min(edgeEndG[here.id],edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  coforall j in NF with (ref LocalSet, ref RemoteSet) {
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               if (xlocal(j,vertexBeginG[here.id],vertexEndG[here.id]) ||
+                                                   xlocal(j,vertexBeginRG[here.id],vertexEndRG[here.id])) {
+                                                    //localArrayNG[mystart+LPNG[here.id]]=j; 
+                                                    //LPNG[here.id]+=1;
+                                                    LocalSet.add(j);
+                                                    writeln("2 My locale=", here.id," Add ", j, " into local");
+                                               } 
+                                               if (xremote(j,HvertexBeginG[here.id],TvertexEndG[here.id]) ||
+                                                   xremote(j,HvertexBeginRG[here.id],TvertexEndRG[here.id])) {
+                                                    //sendArrayG[mystart+SPG[here.id]]=j;                 
+                                                    //SPG[here.id]+=1;
+                                                    RemoteSet.add(j);
+                                                    writeln("3 My locale=", here.id," Add ", j, " into remote");
+                                               }
+                                         }
+                                  }
+                              } 
+                              if xlocal(i,vertexBeginRG[here.id],vertexEndRG[here.id])  {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBeginG[here.id]);
+                                  var nextEnd=min(edgeEndG[here.id],edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  forall j in NF with (ref LocalSet, ref RemoteSet) {
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               if (xlocal(j,vertexBeginG[here.id],vertexEndG[here.id]) ||
+                                                   xlocal(j,vertexBeginRG[here.id],vertexEndRG[here.id])) {
+                                                    //localArrayNG[mystart+LPNG[here.id]]=j; 
+                                                    //LPNG[here.id]+=1;
+                                                    LocalSet.add(j);
+                                                    writeln("4 reverse My locale=", here.id,"Add ", j, "into local");
+                                               } 
+                                               if (xremote(j,HvertexBeginG[here.id],TvertexEndG[here.id]) ||
+                                                   xremote(j,HvertexBeginRG[here.id],TvertexEndRG[here.id])) {
+                                                    //sendArrayG[mystart+SPG[here.id]]=j;                 
+                                                    //SPG[here.id]+=1;
+                                                    RemoteSet.add(j);
+                                                    writeln("5 reverse My locale=", here.id,"Add ", j, "into remote");
+                                               }
+                                         }
+                                  }
+                              }
+                       
+                              if (RemoteSet.size>0) {//there is vertex to be sent
+                                  remoteNum[here.id]+=RemoteSet.size;
+                                  writeln("6-0 My locale=", here.id," there are remote element =",RemoteSet);
+                                  coforall localeNum in 0..numLocales-1  { 
+                                         var ind=0:int;
+                                         //for k in RemoteSet with ( +reduce ind) (var agg= newDstAggregator(int)) {
+                                         var agg= newDstAggregator(int); 
+                                         for k in RemoteSet {
+                                                writeln("6-2 My locale=", here.id," test remote element ", k);
+                                                if (xlocal(k,vertexBeginG[localeNum],vertexEndG[localeNum])||
+                                                    xlocal(k,vertexBeginRG[localeNum],vertexEndRG[localeNum])){
+                                                     agg.copy(recvArrayG[localeNum*numLocales*CMaxSize+
+                                                                         here.id*CMaxSize+ind] ,k);
+                                                     ind+=1;
+                                                     
+                                                     writeln("6 My locale=", here.id,"send", k, "to locale= ",localeNum," number=", ind, " send element=", recvArrayG[localeNum*numLocales*CMaxSize+
+                                                                         here.id*CMaxSize+ind-1]);
+                                                }
+                                         }
+                                         RPG[localeNum*numLocales+here.id]=ind;
+                                         ind=0;
+                                  }
+                              }//end if
+                   }//end coforall
+                   LPG[here.id]=0;
+                   if LocalSet.size>0 {
+                       LPG[here.id]=LocalSet.size;
+                       localNum[here.id]+=LocalSet.size;
+                       var mystart=here.id*CMaxSize;
+                       forall (a,b)  in zip (localArrayG[mystart..mystart+LocalSet.size-1],LocalSet.toArray()) {
+                              writeln("7-0 My locale=", here.id,"  a=",a, " b=",b);
+                              a=b;
+                       }
+                       var tmp=0;
+                       for i in LocalSet {
+                              writeln("7-1 My locale=", here.id,"  element i=",i," tmp=",tmp);
+                              //localArrayG[mystart+tmp]=i;
+                              writeln("7-2 My locale=", here.id,"  local array [tmp]=",localArrayG[mystart+tmp]," tmp=",tmp);
+                              tmp+=1;
+                       }
+                       writeln("7 My locale=", here.id,"  local set=",LocalSet, "to local array and size= ",LocalSet.size, " local array=",localArrayG[mystart..mystart+LocalSet.size-1]);
+                   }
+                   LocalSet.clear();
+                   RemoteSet.clear();
+                   //LPNG[here.id]=0;
+                  }//end on loc
+              }//end coforall loc
+              coforall loc in Locales {
+                  on loc {
+                   var mystart=here.id*CMaxSize;
+                   for i in 0..numLocales-1 {
+                       if (RPG[numLocales*i+here.id]>0) {
+                           localArrayG[mystart+LPG[here.id]-1..mystart+LPG[here.id]+RPG[numLocales*i+here.id]-2]=
+                               recvArrayG[CMaxSize*numLocales*i+here.id*CMaxSize..
+                                          CMaxSize*numLocales*i+here.id*CMaxSize+RPG[numLocales*i+here.id]-1];
+                           LPG[here.id]=LPG[here.id]+RPG[numLocales*i+here.id];
+                           writeln("8 My locale=", here.id," after colloect array=",localArrayG[mystart..mystart+LPG[here.id]-1]);
+                       }
+                         
+                   }
+                  }//end on loc
+              }//end coforall loc
+              numCurF=0;
+              writeln("10-0 LPG=",LPG);
+              for iL in 0..(numLocales-1)  {
+                   if LPG[iL] >0 {
+                       writeln("10  locale ",iL, " has ",LPG[iL], " elements");
+                       numCurF=1;
+                       break;
+                   }
+              }
+              RPG=0;
+              cur_level+=1;
+              writeln("cur level=",cur_level);
+          }//end while  
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          var TotalLocal=0:int;
+          var TotalRemote=0:int;
+          for i in 0..numLocales-1 {
+            TotalLocal+=localNum[i];
+            TotalRemote+=remoteNum[i];
+          }
+          writeln("Local Ratio=", (TotalLocal):real/(TotalLocal+TotalRemote):real,"Total Local Access=",TotalLocal," , Total Remote Access=",TotalRemote);
+          return "success";
+      }//end of_d1_bfs_kernel_u
+
+      proc fo_bag_bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
+                        neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int, 
+                        LF:int,GivenRatio:real):string throws{
+          var cur_level=0;
+          //var SetCurF: domain(int);//use domain to keep the current frontier
+          //var SetNextF:domain(int);//use domain to keep the next frontier
+          var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
+          var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
+          //var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
+          //var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
+          SetCurF.add(root);
+          var numCurF=1:int;
+
+          //while (!SetCurF.isEmpty()) {
+          while (numCurF>0) {
+                //writeln("SetCurF=");
+                //writeln(SetCurF);
+                coforall loc in Locales  with (ref SetNextF) {
+                   on loc {
+                       ref srcf=src;
+                       ref df=dst;
+                       ref nf=nei;
+                       ref sf=start_i;
+
+                       ref srcfR=srcR;
+                       ref dfR=dstR;
+                       ref nfR=neiR;
+                       ref sfR=start_iR;
+
+                       var edgeBegin=src.localSubdomain().low;
+                       var edgeEnd=src.localSubdomain().high;
+                       var vertexBegin=src[edgeBegin];
+                       var vertexEnd=src[edgeEnd];
+                       var vertexBeginR=srcR[edgeBegin];
+                       var vertexEndR=srcR[edgeEnd];
+
+                       proc xlocal(x :int, low:int, high:int):bool{
+                                  if (low<=x && x<=high) {
+                                      return true;
+                                  } else {
+                                      return false;
+                                  }
+                       }
+                       var switchratio=(numCurF:real)/nf.size:real;
+                       if (switchratio<GivenRatio) {//top down
+                           forall i in SetCurF with (ref SetNextF) {
+                              if ((xlocal(i,vertexBegin,vertexEnd)) || (LF==0)) {// current edge has the vertex
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF){
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              } 
+                              if ((xlocal(i,vertexBeginR,vertexEndR)) || (LF==0))  {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF)  {
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              }
+                           }//end coforall
+                       }else {// bottom up
+                           forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                              if depth[i]==-1 {
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF){
+                                         if (SetCurF.contains(j)) {
+                                               depth[i]=cur_level+1;
+                                               SetNextF.add(i);
+                                         }
+                                  }
+
+                              }
+                           }
+                           forall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
+                              if depth[i]==-1 {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF)  {
+                                         if (SetCurF.contains(j)) {
+                                               depth[i]=cur_level+1;
+                                               SetNextF.add(i);
+                                         }
+                                  }
+                              }
+                           }
+                       }
+                   }//end on loc
+                }//end coforall loc
+                cur_level+=1;
+                numCurF=SetNextF.getSize();
+                //numCurF=SetNextF.size;
+                //writeln("SetCurF= ", SetCurF, " SetNextF=", SetNextF, " level ", cur_level+1," numCurf=", numCurF);
+                //numCurF=SetNextF.size;
+                //SetCurF=SetNextF;
+                //SetCurF.clear();
+                SetCurF<=>SetNextF;
+                SetNextF.clear();
+          }//end while  
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          return "success";
+      }//end of fo_bag_bfs_kernel_u
+
+
+
+
+      proc fo_set_bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
+                        neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int, 
+                        LF:int,GivenRatio:real):string throws{
+          var cur_level=0;
+          //var SetCurF: domain(int);//use domain to keep the current frontier
+          //var SetNextF:domain(int);//use domain to keep the next frontier
+          //var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
+          //var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
+          var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
+          var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
+          SetCurF.add(root);
+          var numCurF=1:int;
+
+          //while (!SetCurF.isEmpty()) {
+          while (numCurF>0) {
+                //writeln("SetCurF=");
+                //writeln(SetCurF);
+                coforall loc in Locales  with (ref SetNextF) {
+                   on loc {
+                       ref srcf=src;
+                       ref df=dst;
+                       ref nf=nei;
+                       ref sf=start_i;
+
+                       ref srcfR=srcR;
+                       ref dfR=dstR;
+                       ref nfR=neiR;
+                       ref sfR=start_iR;
+
+                       var edgeBegin=src.localSubdomain().low;
+                       var edgeEnd=src.localSubdomain().high;
+                       var vertexBegin=src[edgeBegin];
+                       var vertexEnd=src[edgeEnd];
+                       var vertexBeginR=srcR[edgeBegin];
+                       var vertexEndR=srcR[edgeEnd];
+
+                       proc xlocal(x :int, low:int, high:int):bool{
+                                  if (low<=x && x<=high) {
+                                      return true;
+                                  } else {
+                                      return false;
+                                  }
+                       }
+
+                       var switchratio=(numCurF:real)/nf.size:real;
+                       if (switchratio<GivenRatio) {//top down
+                           forall i in SetCurF with (ref SetNextF) {
+                              if ((xlocal(i,vertexBegin,vertexEnd)) ||( LF==0)) {// current edge has the vertex
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF){
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              } 
+                              if ((xlocal(i,vertexBeginR,vertexEndR)) ||(LF==0))  {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF)  {
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              }
+                           }//end coforall
+                       }else {//bottom up
+                           forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                              if depth[i]==-1 {
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF){
+                                         if (SetCurF.contains(j)) {
+                                               depth[i]=cur_level+1;
+                                               SetNextF.add(i);
+                                         }
+                                  }
+
+                              }
+                           }
+                           forall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
+                              if depth[i]==-1 {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF)  {
+                                         if (SetCurF.contains(j)) {
+                                               depth[i]=cur_level+1;
+                                               SetNextF.add(i);
+                                         }
+                                  }
+                              }
+                           }
+                       }
+                   }//end on loc
+                }//end coforall loc
+                cur_level+=1;
+                //numCurF=SetNextF.getSize();
+                numCurF=SetNextF.size;
+                //writeln("SetCurF= ", SetCurF, " SetNextF=", SetNextF, " level ", cur_level+1," numCurf=", numCurF);
+                //numCurF=SetNextF.size;
+                SetCurF=SetNextF;
+                //SetCurF.clear();
+                //SetCurF<=>SetNextF;
+                SetNextF.clear();
+          }//end while  
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          return "success";
+      }//end of fo_set_bfs_kernel_u
+
+
+
+
+      proc fo_domain_bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
+                        neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int, 
+                        LF:int,GivenRatio:real):string throws{
+          var cur_level=0;
+          var SetCurF: domain(int);//use domain to keep the current frontier
+          var SetNextF:domain(int);//use domain to keep the next frontier
+          //var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
+          //var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
+          //var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
+          //var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
+          SetCurF.add(root);
+          var numCurF=1:int;
+
+          //while (!SetCurF.isEmpty()) {
+          while (numCurF>0) {
+                //writeln("SetCurF=");
+                //writeln(SetCurF);
+                coforall loc in Locales  with (ref SetNextF) {
+                   on loc {
+                       ref srcf=src;
+                       ref df=dst;
+                       ref nf=nei;
+                       ref sf=start_i;
+
+                       ref srcfR=srcR;
+                       ref dfR=dstR;
+                       ref nfR=neiR;
+                       ref sfR=start_iR;
+
+                       var edgeBegin=src.localSubdomain().low;
+                       var edgeEnd=src.localSubdomain().high;
+                       var vertexBegin=src[edgeBegin];
+                       var vertexEnd=src[edgeEnd];
+                       var vertexBeginR=srcR[edgeBegin];
+                       var vertexEndR=srcR[edgeEnd];
+
+                       proc xlocal(x :int, low:int, high:int):bool{
+                                  if (low<=x && x<=high) {
+                                      return true;
+                                  } else {
+                                      return false;
+                                  }
+                       }
+
+                       var switchratio=(numCurF:real)/nf.size:real;
+                       if (switchratio<GivenRatio) {//top down
+                           forall i in SetCurF with (ref SetNextF) {
+                              if ((xlocal(i,vertexBegin,vertexEnd)) ||( LF==0)) {// current edge has the vertex
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF){
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              } 
+                              if ((xlocal(i,vertexBeginR,vertexEndR)) || (LF==0))  {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF)  {
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              }
+                           }//end coforall
+                       } else {//bottom up
+                           forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                              if depth[i]==-1 {
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF){
+                                         if (SetCurF.contains(j)) {
+                                               depth[i]=cur_level+1;
+                                               SetNextF.add(i);
+                                         }
+                                  }
+
+                              }
+                           }
+                           forall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
+                              if depth[i]==-1 {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF)  {
+                                         if (SetCurF.contains(j)) {
+                                               depth[i]=cur_level+1;
+                                               SetNextF.add(i);
+                                         }
+                                  }
+                              }
+                           }
+
+                       }
+                   }//end on loc
+                }//end coforall loc
+                cur_level+=1;
+                //numCurF=SetNextF.getSize();
+                numCurF=SetNextF.size;
+                //writeln("SetCurF= ", SetCurF, " SetNextF=", SetNextF, " level ", cur_level+1," numCurf=", numCurF);
+                //numCurF=SetNextF.size;
+                SetCurF=SetNextF;
+                //SetCurF.clear();
+                //SetCurF<=>SetNextF;
+                SetNextF.clear();
+          }//end while  
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          return "success";
+      }//end of fo_domain_bfs_kernel_u
+
+
+
+      proc fo_d1_bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
+                        neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int,GivenRatio:real):string throws{
           var cur_level=0;
           var numCurF=1:int;//flag for stopping loop
 
@@ -3692,7 +4158,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                    var RemoteSet=new set(int,parSafe = true);//use set to keep the next remote frontier
 
                    var mystart=here.id*CMaxSize;//start index 
-                   coforall i in localArrayG[mystart..mystart+LPG[here.id]-1] with (ref LocalSet, ref RemoteSet)  {
+
+
+
+                   var   switchratio=(numCurF:real)/nf.size:real;
+                   if (switchratio<GivenRatio+1) {//top down
+
+                       forall i in localArrayG[mystart..mystart+LPG[here.id]-1] 
+                                                   with (ref LocalSet, ref RemoteSet)  {
                             // each locale just processes its local vertices
                               if xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) {
                                   // i in src, current edge has the vertex
@@ -3701,7 +4174,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                   var nextStart=max(edgeId,edgeBeginG[here.id]);
                                   var nextEnd=min(edgeEndG[here.id],edgeId+numNF-1);
                                   ref NF=df[nextStart..nextEnd];
-                                  coforall j in NF with (ref LocalSet, ref RemoteSet) {
+                                  forall j in NF with (ref LocalSet, ref RemoteSet) {
                                          if (depth[j]==-1) {
                                                depth[j]=cur_level+1;
                                                if (xlocal(j,vertexBeginG[here.id],vertexEndG[here.id]) ||
@@ -3768,7 +4241,13 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                        }
                                   }
                               }//end if
-                   }//end coforall
+                       }//end coforall
+                   }// end of top down
+                   else {  //bottom up
+
+                   }
+
+
                    localNum[here.id]+=LPG[here.id];
                    LPG[here.id]=0;
                    if LocalSet.size>0 {
@@ -3823,27 +4302,449 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           }
           writeln("Local Ratio=", (TotalLocal):real/(TotalLocal+TotalRemote):real,"Total Local Access=",TotalLocal," , Total Remote Access=",TotalRemote);
           return "success";
-      }//end of bfs_kernel_u
+      }//end of co_d1_bfs_kernel_u
 
-
-
-      proc _develop_bfs_kernel(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int):string throws{
+      proc co_bag_bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
+                        neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int, 
+                        LF:int,GivenRatio:real):string throws{
           var cur_level=0;
-          var numCurF=1:int;//flag to show if finished
+          //var SetCurF: domain(int);//use domain to keep the current frontier
+          //var SetNextF:domain(int);//use domain to keep the next frontier
+          var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
+          var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
+          //var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
+          //var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
+          SetCurF.add(root);
+          var numCurF=1:int;
+
+          //while (!SetCurF.isEmpty()) {
+          while (numCurF>0) {
+                //writeln("SetCurF=");
+                //writeln(SetCurF);
+                coforall loc in Locales  with (ref SetNextF) {
+                   on loc {
+                       ref srcf=src;
+                       ref df=dst;
+                       ref nf=nei;
+                       ref sf=start_i;
+
+                       ref srcfR=srcR;
+                       ref dfR=dstR;
+                       ref nfR=neiR;
+                       ref sfR=start_iR;
+
+                       var edgeBegin=src.localSubdomain().low;
+                       var edgeEnd=src.localSubdomain().high;
+                       var vertexBegin=src[edgeBegin];
+                       var vertexEnd=src[edgeEnd];
+                       var vertexBeginR=srcR[edgeBegin];
+                       var vertexEndR=srcR[edgeEnd];
+
+                       proc xlocal(x :int, low:int, high:int):bool{
+                                  if (low<=x && x<=high) {
+                                      return true;
+                                  } else {
+                                      return false;
+                                  }
+                       }
+                       var switchratio=(numCurF:real)/nf.size:real;
+                       if (switchratio<GivenRatio) {//top down
+                           coforall i in SetCurF with (ref SetNextF) {
+                              if ((xlocal(i,vertexBegin,vertexEnd)) || (LF==0)) {// current edge has the vertex
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  coforall j in NF with (ref SetNextF){
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              } 
+                              if ((xlocal(i,vertexBeginR,vertexEndR)) || (LF==0))  {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  coforall j in NF with (ref SetNextF)  {
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              }
+                           }//end coforall
+                       }else {// bottom up
+                           coforall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                              if depth[i]==-1 {
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  coforall j in NF with (ref SetNextF){
+                                         if (SetCurF.contains(j)) {
+                                               depth[i]=cur_level+1;
+                                               SetNextF.add(i);
+                                         }
+                                  }
+
+                              }
+                           }
+                           coforall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
+                              if depth[i]==-1 {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  coforall j in NF with (ref SetNextF)  {
+                                         if (SetCurF.contains(j)) {
+                                               depth[i]=cur_level+1;
+                                               SetNextF.add(i);
+                                         }
+                                  }
+                              }
+                           }
+                       }
+                   }//end on loc
+                }//end coforall loc
+                cur_level+=1;
+                numCurF=SetNextF.getSize();
+                //numCurF=SetNextF.size;
+                //writeln("SetCurF= ", SetCurF, " SetNextF=", SetNextF, " level ", cur_level+1," numCurf=", numCurF);
+                //numCurF=SetNextF.size;
+                //SetCurF=SetNextF;
+                //SetCurF.clear();
+                SetCurF<=>SetNextF;
+                SetNextF.clear();
+          }//end while  
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          return "success";
+      }//end of co_bag_bfs_kernel_u
+
+
+
+
+      proc co_set_bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
+                        neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int, 
+                        LF:int,GivenRatio:real):string throws{
+          var cur_level=0;
+          //var SetCurF: domain(int);//use domain to keep the current frontier
+          //var SetNextF:domain(int);//use domain to keep the next frontier
+          //var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
+          //var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
+          var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
+          var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
+          SetCurF.add(root);
+          var numCurF=1:int;
+
+          //while (!SetCurF.isEmpty()) {
+          while (numCurF>0) {
+                //writeln("SetCurF=");
+                //writeln(SetCurF);
+                coforall loc in Locales  with (ref SetNextF) {
+                   on loc {
+                       ref srcf=src;
+                       ref df=dst;
+                       ref nf=nei;
+                       ref sf=start_i;
+
+                       ref srcfR=srcR;
+                       ref dfR=dstR;
+                       ref nfR=neiR;
+                       ref sfR=start_iR;
+
+                       var edgeBegin=src.localSubdomain().low;
+                       var edgeEnd=src.localSubdomain().high;
+                       var vertexBegin=src[edgeBegin];
+                       var vertexEnd=src[edgeEnd];
+                       var vertexBeginR=srcR[edgeBegin];
+                       var vertexEndR=srcR[edgeEnd];
+
+                       proc xlocal(x :int, low:int, high:int):bool{
+                                  if (low<=x && x<=high) {
+                                      return true;
+                                  } else {
+                                      return false;
+                                  }
+                       }
+
+                       var switchratio=(numCurF:real)/nf.size:real;
+                       if (switchratio<GivenRatio) {//top down
+                           coforall i in SetCurF with (ref SetNextF) {
+                              if ((xlocal(i,vertexBegin,vertexEnd)) ||( LF==0)) {// current edge has the vertex
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  coforall j in NF with (ref SetNextF){
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              } 
+                              if ((xlocal(i,vertexBeginR,vertexEndR)) ||(LF==0))  {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  coforall j in NF with (ref SetNextF)  {
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              }
+                           }//end coforall
+                       }else {//bottom up
+                           coforall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                              if depth[i]==-1 {
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  coforall j in NF with (ref SetNextF){
+                                         if (SetCurF.contains(j)) {
+                                               depth[i]=cur_level+1;
+                                               SetNextF.add(i);
+                                         }
+                                  }
+
+                              }
+                           }
+                           coforall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
+                              if depth[i]==-1 {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  coforall j in NF with (ref SetNextF)  {
+                                         if (SetCurF.contains(j)) {
+                                               depth[i]=cur_level+1;
+                                               SetNextF.add(i);
+                                         }
+                                  }
+                              }
+                           }
+                       }
+                   }//end on loc
+                }//end coforall loc
+                cur_level+=1;
+                //numCurF=SetNextF.getSize();
+                numCurF=SetNextF.size;
+                //writeln("SetCurF= ", SetCurF, " SetNextF=", SetNextF, " level ", cur_level+1," numCurf=", numCurF);
+                //numCurF=SetNextF.size;
+                SetCurF=SetNextF;
+                //SetCurF.clear();
+                //SetCurF<=>SetNextF;
+                SetNextF.clear();
+          }//end while  
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          return "success";
+      }//end of co_set_bfs_kernel_u
+
+
+
+
+      proc co_domain_bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
+                        neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int, 
+                        LF:int,GivenRatio:real):string throws{
+          var cur_level=0;
+          var SetCurF: domain(int);//use domain to keep the current frontier
+          var SetNextF:domain(int);//use domain to keep the next frontier
+          //var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
+          //var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
+          //var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
+          //var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
+          SetCurF.add(root);
+          var numCurF=1:int;
+
+          //while (!SetCurF.isEmpty()) {
+          while (numCurF>0) {
+                //writeln("SetCurF=");
+                //writeln(SetCurF);
+                coforall loc in Locales  with (ref SetNextF) {
+                   on loc {
+                       ref srcf=src;
+                       ref df=dst;
+                       ref nf=nei;
+                       ref sf=start_i;
+
+                       ref srcfR=srcR;
+                       ref dfR=dstR;
+                       ref nfR=neiR;
+                       ref sfR=start_iR;
+
+                       var edgeBegin=src.localSubdomain().low;
+                       var edgeEnd=src.localSubdomain().high;
+                       var vertexBegin=src[edgeBegin];
+                       var vertexEnd=src[edgeEnd];
+                       var vertexBeginR=srcR[edgeBegin];
+                       var vertexEndR=srcR[edgeEnd];
+
+                       proc xlocal(x :int, low:int, high:int):bool{
+                                  if (low<=x && x<=high) {
+                                      return true;
+                                  } else {
+                                      return false;
+                                  }
+                       }
+
+                       var switchratio=(numCurF:real)/nf.size:real;
+                       if (switchratio<GivenRatio) {//top down
+                           coforall i in SetCurF with (ref SetNextF) {
+                              if ((xlocal(i,vertexBegin,vertexEnd)) ||( LF==0)) {// current edge has the vertex
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  coforall j in NF with (ref SetNextF){
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              } 
+                              if ((xlocal(i,vertexBeginR,vertexEndR)) || (LF==0))  {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  coforall j in NF with (ref SetNextF)  {
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              }
+                           }//end coforall
+                       } else {//bottom up
+                           coforall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                              if depth[i]==-1 {
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  coforall j in NF with (ref SetNextF){
+                                         if (SetCurF.contains(j)) {
+                                               depth[i]=cur_level+1;
+                                               SetNextF.add(i);
+                                         }
+                                  }
+
+                              }
+                           }
+                           coforall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
+                              if depth[i]==-1 {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  coforall j in NF with (ref SetNextF)  {
+                                         if (SetCurF.contains(j)) {
+                                               depth[i]=cur_level+1;
+                                               SetNextF.add(i);
+                                         }
+                                  }
+                              }
+                           }
+
+                       }
+                   }//end on loc
+                }//end coforall loc
+                cur_level+=1;
+                //numCurF=SetNextF.getSize();
+                numCurF=SetNextF.size;
+                //writeln("SetCurF= ", SetCurF, " SetNextF=", SetNextF, " level ", cur_level+1," numCurf=", numCurF);
+                //numCurF=SetNextF.size;
+                SetCurF=SetNextF;
+                //SetCurF.clear();
+                //SetCurF<=>SetNextF;
+                SetNextF.clear();
+          }//end while  
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          return "success";
+      }//end of co_domain_bfs_kernel_u
+
+
+
+      proc co_d1_bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
+                        neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int,GivenRatio:real):string throws{
+          var cur_level=0;
+          var numCurF=1:int;//flag for stopping loop
 
 
           var edgeBeginG=makeDistArray(numLocales,int);//each locale's starting edge ID
           var edgeEndG=makeDistArray(numLocales,int);//each locales'ending edge ID
+
           var vertexBeginG=makeDistArray(numLocales,int);//each locale's beginning vertex ID in src
           var vertexEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
+          var HvertexBeginG=makeDistArray(numLocales,int);//each locale's beginning vertex ID in src
+          var TvertexEndG=makeDistArray(numLocales,int);// each locales' ending vertex ID in src
+
+          var vertexBeginRG=makeDistArray(numLocales,int);// each locales' beginning vertex ID in srcR
+          var vertexEndRG=makeDistArray(numLocales,int);// each locales's ending vertex ID in srcR
+          var HvertexBeginRG=makeDistArray(numLocales,int);// each locales' beginning vertex ID in srcR
+          var TvertexEndRG=makeDistArray(numLocales,int);// each locales's ending vertex ID in srcR
+
+          var localNum=makeDistArray(numLocales,int);// current locales's local access times
+          var remoteNum=makeDistArray(numLocales,int);// current locales's remote access times
+          localNum=0;
+          remoteNum=0;
+
           var MaxBufSize=makeDistArray(numLocales,int);//temp array to calculate global max
           coforall loc in Locales   {
               on loc {
                  edgeBeginG[here.id]=src.localSubdomain().low;
                  edgeEndG[here.id]=src.localSubdomain().high;
+
                  vertexBeginG[here.id]=src[edgeBeginG[here.id]];
                  vertexEndG[here.id]=src[edgeEndG[here.id]];
-                 MaxBufSize[here.id]=vertexEndG[here.id]-vertexBeginG[here.id]+ 1;
+
+                 vertexBeginRG[here.id]=srcR[edgeBeginG[here.id]];
+                 vertexEndRG[here.id]=srcR[edgeEndG[here.id]];
+                 if (here.id>0) {
+                   HvertexBeginG[here.id]=vertexEndG[here.id-1];
+                   HvertexBeginRG[here.id]=vertexEndRG[here.id-1];
+                 } else {
+                   HvertexBeginG[here.id]=-1;
+                   HvertexBeginRG[here.id]=-1;
+                 }
+                 if (here.id<numLocales-1) {
+                   TvertexEndG[here.id]=vertexBeginG[here.id+1];
+                   TvertexEndRG[here.id]=vertexBeginRG[here.id+1];
+                 } else {
+                   TvertexEndG[here.id]=nei.size;
+                   TvertexEndRG[here.id]=nei.size;
+                 }
+
+                 MaxBufSize[here.id]=vertexEndG[here.id]-vertexBeginG[here.id]+
+                                     vertexEndRG[here.id]-vertexBeginRG[here.id]+2;
               }
           }
           var CMaxSize=1: int;
@@ -3853,16 +4754,16 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
               }
           }
           var localArrayG=makeDistArray(numLocales*CMaxSize,int);//current frontier elements
-          var localArrayNG=makeDistArray(numLocales*CMaxSize,int);// next frontier in the same locale
-          var sendArrayG=makeDistArray(numLocales*CMaxSize,int);// next frontier in other locales
+          //var localArrayNG=makeDistArray(numLocales*CMaxSize,int);// next frontier in the same locale
+          //var sendArrayG=makeDistArray(numLocales*CMaxSize,int);// next frontier in other locales
           var recvArrayG=makeDistArray(numLocales*numLocales*CMaxSize,int);//hold the current frontier elements
           var LPG=makeDistArray(numLocales,int);// frontier pointer to current position
-          var LPNG=makeDistArray(numLocales,int);// next frontier pointer to current position
-          var SPG=makeDistArray(numLocales,int);// receive buffer
+          //var LPNG=makeDistArray(numLocales,int);// next frontier pointer to current position
+          //var SPG=makeDistArray(numLocales,int);// receive buffer
           var RPG=makeDistArray(numLocales*numLocales,int);//pointer to the current position can receive element
           LPG=0;
-          LPNG=0;
-          SPG=0;
+          //LPNG=0;
+          //SPG=0;
           RPG=0;
 
           proc xlocal(x :int, low:int, high:int):bool{
@@ -3873,14 +4774,23 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                      }
           }
 
+          proc xremote(x :int, low:int, high:int):bool{
+                     if (low>=x || x>=high) {
+                            return true;
+                     } else {
+                            return false;
+                     }
+          }
           coforall loc in Locales   {
               on loc {
-                 if (xlocal(root,vertexBeginG[here.id],vertexEndG[here.id])) {
-                   localArrayG[CMaxSize*here.id+LPG[here.id]]=root;
-                   LPG[here.id]+=1;
+                 if (xlocal(root,vertexBeginG[here.id],vertexEndG[here.id]) || 
+                                 xlocal(root,vertexBeginRG[here.id],vertexEndRG[here.id])) {
+                   localArrayG[CMaxSize*here.id]=root;
+                   LPG[here.id]=1;
                  }
               }
           }
+
           while numCurF >0 {
               coforall loc in Locales   {
                   on loc {
@@ -3889,93 +4799,148 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                    ref nf=nei;
                    ref sf=start_i;
 
+                   ref srcfR=srcR;
+                   ref dfR=dstR;
+                   ref nfR=neiR;
+                   ref sfR=start_iR;
 
-                   var mystart=here.id*CMaxSize;
-                   coforall i in localArrayG[mystart..mystart+LPG[here.id]]  {
-                              if xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) {// current edge has the vertex
+
+                   //var aggdst= newDstAggregator(int);
+                   //var aggsrc= newSrcAggregator(int);
+                   var LocalSet= new set(int,parSafe = true);//use set to keep the next local frontier, 
+                                                             //vertex in src or srcR
+                   var RemoteSet=new set(int,parSafe = true);//use set to keep the next remote frontier
+
+                   var mystart=here.id*CMaxSize;//start index 
+
+
+
+                   var   switchratio=(numCurF:real)/nf.size:real;
+                   if (switchratio<GivenRatio+1) {//top down
+
+                       coforall i in localArrayG[mystart..mystart+LPG[here.id]-1] 
+                                                   with (ref LocalSet, ref RemoteSet)  {
+                            // each locale just processes its local vertices
+                              if xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) {
+                                  // i in src, current edge has the vertex
                                   var    numNF=nf[i];
                                   var    edgeId=sf[i];
                                   var nextStart=max(edgeId,edgeBeginG[here.id]);
                                   var nextEnd=min(edgeEndG[here.id],edgeId+numNF-1);
                                   ref NF=df[nextStart..nextEnd];
-                                  forall j in NF {
+                                  coforall j in NF with (ref LocalSet, ref RemoteSet) {
                                          if (depth[j]==-1) {
                                                depth[j]=cur_level+1;
-                                               if (xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) ) {
-                                                    localArrayNG[mystart+LPNG[here.id]]=j; 
-                                                    LPNG[here.id]+=1;
+                                               if (xlocal(j,vertexBeginG[here.id],vertexEndG[here.id]) ||
+                                                   xlocal(j,vertexBeginRG[here.id],vertexEndRG[here.id])) {
+                                                    //localArrayNG[mystart+LPNG[here.id]]=j; 
+                                                    //LPNG[here.id]+=1;
+                                                    LocalSet.add(j);
                                                } 
-                                               else {
-                                                    sendArrayG[mystart+SPG[here.id]]=j;                 
-                                                    SPG[here.id]+=1;
+                                               if (xremote(j,HvertexBeginG[here.id],TvertexEndG[here.id]) ||
+                                                   xremote(j,HvertexBeginRG[here.id],TvertexEndRG[here.id])) {
+                                                    //sendArrayG[mystart+SPG[here.id]]=j;                 
+                                                    //SPG[here.id]+=1;
+                                                    RemoteSet.add(j);
                                                }
                                          }
                                   }
                               } 
-                       
-                              if (SPG[here.id]>0) {//there is vertex to be sent
-                                  if SPG[here.id]>1 {
-                                     sort(sendArrayG[mystart..mystart+SPG[here.id]-1]);
-                                     var oldnum=SPG[here.id];
-                                     for i in 1..oldnum-1 {// remove duplicated vertices
-                                        if sendArrayG[mystart+i]==sendArrayG[mystart+i-1] {
-                                           var tmp=sendArrayG[mystart+i+1..mystart+SPG[here.id]-1];
-                                           SPG[here.id]-=1;
-                                           sendArrayG[mystart+i..mystart+SPG[here.id]-1]=tmp;
-                                        }
-                                     }
-                                  }
-                                  for k in 0..SPG[here.id]-1  {//move data from send array to recv array
-                                         forall localeNum in 0..numLocales-1  { 
-                                             if (xlocal(k,vertexBeginG[localeNum],vertexEndG[localeNum])){
-                                                 recvArrayG[mystart*numLocales+
-                                                            localeNum*CMaxSize+
-                                                            RPG[localeNum+numLocales*here.id]]=k;
-                                                 RPG[localeNum+numLocales*here.id]+=1;
-
-                                             }
+                              if xlocal(i,vertexBeginRG[here.id],vertexEndRG[here.id])  {
+                                  var    numNF=nfR[i];
+                                  var    edgeId=sfR[i];
+                                  var nextStart=max(edgeId,edgeBeginG[here.id]);
+                                  var nextEnd=min(edgeEndG[here.id],edgeId+numNF-1);
+                                  ref NF=dfR[nextStart..nextEnd];
+                                  coforall j in NF with (ref LocalSet, ref RemoteSet) {
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               if (xlocal(j,vertexBeginG[here.id],vertexEndG[here.id]) ||
+                                                   xlocal(j,vertexBeginRG[here.id],vertexEndRG[here.id])) {
+                                                    //localArrayNG[mystart+LPNG[here.id]]=j; 
+                                                    //LPNG[here.id]+=1;
+                                                    LocalSet.add(j);
+                                               } 
+                                               if (xremote(j,HvertexBeginG[here.id],TvertexEndG[here.id]) ||
+                                                   xremote(j,HvertexBeginRG[here.id],TvertexEndRG[here.id])) {
+                                                    //sendArrayG[mystart+SPG[here.id]]=j;                 
+                                                    //SPG[here.id]+=1;
+                                                    RemoteSet.add(j);
+                                               }
                                          }
                                   }
+                              }
+                       
+                              if (RemoteSet.size>0) {//there is vertex to be sent
+                                  remoteNum[here.id]+=RemoteSet.size;
+                                  coforall localeNum in 0..numLocales-1  { 
+                                       if localeNum != here.id{
+                                         var ind=0:int;
+                                         //for k in RemoteSet with ( +reduce ind) (var agg= newDstAggregator(int)) {
+                                         var agg= newDstAggregator(int); 
+                                         for k in RemoteSet {
+                                                if (xlocal(k,vertexBeginG[localeNum],vertexEndG[localeNum])||
+                                                    xlocal(k,vertexBeginRG[localeNum],vertexEndRG[localeNum])){
+                                                     agg.copy(recvArrayG[localeNum*numLocales*CMaxSize+
+                                                                         here.id*CMaxSize+ind] ,k);
+                                                     //recvArrayG[localeNum*numLocales*CMaxSize+
+                                                     //                    here.id*CMaxSize+ind]=k;
+                                                     ind+=1;
+                                                     
+                                                }
+                                         }
+                                         agg.flush();
+                                         RPG[localeNum*numLocales+here.id]=ind;
+                                         ind=0;
+                                       }
+                                  }
                               }//end if
-                   }//end coforall
+                       }//end coforall
+                   }// end of top down
+                   else {  //bottom up
+
+                   }
+
+
+                   localNum[here.id]+=LPG[here.id];
+                   LPG[here.id]=0;
+                   if LocalSet.size>0 {
+                       LPG[here.id]=LocalSet.size;
+                       localNum[here.id]+=LocalSet.size;
+                       var mystart=here.id*CMaxSize;
+                       forall (a,b)  in zip (localArrayG[mystart..mystart+LocalSet.size-1],LocalSet.toArray()) {
+                              a=b;
+                       }
+                   }
+                   LocalSet.clear();
+                   RemoteSet.clear();
+                   //LPNG[here.id]=0;
+                  }//end on loc
+              }//end coforall loc
+              coforall loc in Locales {
+                  on loc {
+                   var mystart=here.id*CMaxSize;
+                   for i in 0..numLocales-1 {
+                     if i != here.id {
+                       if (RPG[here.id*numLocales+i]>0) {
+                           localArrayG[mystart+LPG[here.id]..mystart+LPG[here.id]+RPG[numLocales*here.id+i]-1]=
+                           recvArrayG[CMaxSize*numLocales*here.id+i*CMaxSize..
+                                      CMaxSize*numLocales*here.id+i*CMaxSize+RPG[numLocales*here.id+i]-1];
+                           LPG[here.id]=LPG[here.id]+RPG[numLocales*here.id+i];
+                       }
+                     }
+                         
+                   }
                   }//end on loc
               }//end coforall loc
               numCurF=0;
-              coforall loc in Locales with (ref numCurF) {
-                  on loc {
-                   LPG[here.id]=0;
-                   var mystart=here.id*CMaxSize;
-                   if (LPNG[here.id]>0) {// first collect vertices in my locales
-                           localArrayG[mystart..mystart+LPNG[here.id]-1]=
-                              localArrayNG[mystart..mystart+LPNG[here.id]-1];
-                           LPG[here.id]=LPNG[here.id];
-                           numCurF=1;
-                           LPNG[here.id]=0;
+              for iL in 0..(numLocales-1)  {
+                   if LPG[iL] >0 {
+                       numCurF=1;
+                       break;
                    }
-                   for i in 0..numLocales-1 {
-                       if (RPG[numLocales*i+here.id]>0) {
-                           localArrayG[mystart+LPNG[here.id]..mystart+LPNG[here.id]+RPG[numLocales*i+here.id]-2]=
-                               recvArrayG[CMaxSize*numLocales*i+here.id*CMaxSize..
-                                          CMaxSize*numLocales*i+here.id*CMaxSize+RPG[numLocales*i+here.id]-1];
-                           numCurF=1;
-                           LPG[here.id]=LPG[here.id]+RPG[numLocales*i+here.id];
-                           RPG[numLocales*i+here.id]=0;
-                       }
-                   }
-                   if LPG[here.id]>0 {
-                       sort(localArrayG[mystart..mystart+SPG[here.id]-1]);
-                       var oldnum=LPG[here.id];
-                       for i in 1..oldnum-1 {// remove duplicated vertices
-                             if localArrayG[mystart+i]==localArrayG[mystart+i-1] {
-                                var tmp=localArrayG[mystart+i+1..mystart+LPG[here.id]-1];
-                                LPG[here.id]-=1;
-                                localArrayG[mystart+i..mystart+LPG[here.id]-1]=tmp;
-                             }
-                       }
-
-                   }
-                  }//end on loc
-              }//end coforall loc
+              }
+              RPG=0;
               cur_level+=1;
           }//end while  
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
@@ -3983,8 +4948,15 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
+          var TotalLocal=0:int;
+          var TotalRemote=0:int;
+          for i in 0..numLocales-1 {
+            TotalLocal+=localNum[i];
+            TotalRemote+=remoteNum[i];
+          }
+          writeln("Local Ratio=", (TotalLocal):real/(TotalLocal+TotalRemote):real,"Total Local Access=",TotalLocal," , Total Remote Access=",TotalRemote);
           return "success";
-      }//end of bfs_kernel_u
+      }//end of co_d1_bfs_kernel_u
 
       proc return_depth(): string throws{
           var depthName = st.nextName();
@@ -4024,35 +4996,315 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       }
       else {
           if (Weighted!=0) {
-               (srcN, dstN, startN, neighbourN,srcRN, dstRN, startRN, neighbourRN,vweightN,eweightN, rootN )=
-                   restpart.splitMsgToTuple(11);
-               var ag = new owned SegGraphUDW(Nv,Ne,Directed,Weighted,
+              var ratios:string;
+              (srcN, dstN, startN, neighbourN,srcRN, dstRN, startRN, neighbourRN,vweightN,eweightN, rootN, ratios)=
+                   restpart.splitMsgToTuple(12);
+              var ag = new owned SegGraphUDW(Nv,Ne,Directed,Weighted,
                       srcN,dstN, startN,neighbourN,
                       srcRN,dstRN, startRN,neighbourRN,
                       vweightN,eweightN, st);
               root=rootN:int;
+              depth=-1;
               depth[root]=0;
-              //bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
-              //             ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a);
-              _d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
-                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a);
-              repMsg=return_depth();
+              var Flag=0:int;
+              var GivenRatio=ratios:real;
+              if (GivenRatio == DefaultRatio ) {//do default call
+                  co_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
+                  repMsg=return_depth();
+ 
+              } else {// do batch test
+                  depth=-1;
+                  depth[root]=0;
+                  timer.stop();
+                  timer.start();
+                  co_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co D version $$$$$$$$$$$$$$$$$$");
+
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=1;
+                  co_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co Bag L version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=0;
+                  co_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co Bag G version $$$$$$$$$$$$$$$$$$");
+
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=1;
+                  co_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co Set L version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=0;
+                  co_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co Set G version $$$$$$$$$$$$$$$$$$");
+
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=1;
+                  co_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co Domain L version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=0;
+                  co_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co Domain G version $$$$$$$$$$$$$$$$$$");
+
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.clear();
+                  timer.start();
+                  fo_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for D version $$$$$$$$$$$$$$$$$$");
+
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=1;
+                  fo_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Bag L version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=0;
+                  fo_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Bag G version $$$$$$$$$$$$$$$$$$");
+
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=1;
+                  fo_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Set L version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=0;
+                  fo_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Set G version $$$$$$$$$$$$$$$$$$");
+
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=1;
+                  fo_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Domain L version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=0;
+                  fo_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Domain G version $$$$$$$$$$$$$$$$$$");
+
+                  repMsg=return_depth();
+              }//end of batch test
 
           } else {
-              (srcN, dstN, startN, neighbourN,srcRN, dstRN, startRN, neighbourRN, rootN )=
-                   restpart.splitMsgToTuple(9);
+              var ratios:string;
+              (srcN, dstN, startN, neighbourN,srcRN, dstRN, startRN, neighbourRN, rootN,ratios )=
+                   restpart.splitMsgToTuple(10);
               var ag = new owned SegGraphUD(Nv,Ne,Directed,Weighted,
                       srcN,dstN, startN,neighbourN,
                       srcRN,dstRN, startRN,neighbourRN,
                       st);
 
               root=rootN:int;
+              depth=-1;
               depth[root]=0;
-              //bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
-              //             ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a);
-              _d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
-                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a);
-              repMsg=return_depth();
+              var Flag=0:int;
+              var GivenRatio=ratios:real;
+              if (GivenRatio == DefaultRatio ) {//do default call
+                  co_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  repMsg=return_depth();
+ 
+              } else {// do batch test
+                  timer.stop();
+                  timer.start();
+                  co_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co D version $$$$$$$$$$$$$$$$$$");
+
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=1;
+                  co_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co Bag L version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=0;
+                  co_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co Bag G version $$$$$$$$$$$$$$$$$$");
+
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=1;
+                  co_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co Set L version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=0;
+                  co_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co Set G version $$$$$$$$$$$$$$$$$$");
+
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=1;
+                  co_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co Domain L version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=0;
+                  co_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co Domain G version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.clear();
+                  timer.start();
+                  fo_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for D version $$$$$$$$$$$$$$$$$$");
+
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=1;
+                  fo_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Bag L version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=0;
+                  fo_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Bag G version $$$$$$$$$$$$$$$$$$");
+
+ 
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=1;
+                  fo_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Set L version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=0;
+                  fo_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Set G version $$$$$$$$$$$$$$$$$$");
+
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=1;
+                  fo_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Domain L version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.start();
+                  Flag=0;
+                  fo_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Domain G version $$$$$$$$$$$$$$$$$$");
+
+
+
+                  repMsg=return_depth();
+              //repMsg=return_depth();
+              }
           }
       }
       timer.stop();
