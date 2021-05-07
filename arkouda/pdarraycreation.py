@@ -1113,7 +1113,7 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
         """
         cmd="segmentedGraphBFS"
         #if (cast(int,graph.directed)!=0)  :
-        DefaultRatio=0.75111
+        DefaultRatio=0.85111
         if (int(graph.directed)>0)  :
             if (int(graph.weighted)==0):
               # directed unweighted GraphD
