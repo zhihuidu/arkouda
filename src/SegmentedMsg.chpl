@@ -4375,8 +4375,9 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
               numCurF=0;
               for iL in 0..(numLocales-1)  {
                    if LPG[iL] >0 {
-                       numCurF=1;
-                       break;
+                       //numCurF=1;
+                       numCurF+=LPG[iL];
+                       //break;
                    }
               }
               RPG=0;
@@ -5125,8 +5126,8 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
               numCurF=0;
               for iL in 0..(numLocales-1)  {
                    if LPG[iL] >0 {
-                       numCurF=1;
-                       break;
+                       numCurF+=LPG[iL];
+                       //break;
                    }
               }
               RPG=0;
