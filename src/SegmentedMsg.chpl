@@ -5010,9 +5010,11 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                 if (xlocal(x,vertexBeginG[i],vertexEndG[i]) ||
                                     xlocal(x,vertexBeginRG[i],vertexEndRG[i])) {
                                     var mystart=i*CMaxSize;
-                                    coforall j in localArrayG[mystart..mystart+LPG[i]-1] with (ref returnval){
+                                    //coforall j in localArrayG[mystart..mystart+LPG[i]-1] with (ref returnval){
+                                    for j in localArrayG[mystart..mystart+LPG[i]-1] {
                                          if j==x {
                                             returnval=true;
+                                            break;
                                          }
                                     }
                                 }
