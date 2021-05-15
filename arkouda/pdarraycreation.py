@@ -981,7 +981,7 @@ def graph_file_read(Ne:int, Nv:int,Ncol:int,directed:int, filename: str)  -> Uni
         RuntimeError
         """
         cmd = "segmentedGraphFile"
-        RCMFlag=1
+        RCMFlag=0
         #args="{} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename);
         args="{} {} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename,RCMFlag);
         #repMsg = generic_msg(msg)
@@ -1077,7 +1077,7 @@ def rmat_gen (lgNv:int, Ne_per_v:int, p:float, directed: int,weighted:int) ->\
         RuntimeError
         """
         cmd = "segmentedRMAT"
-        RCMFlag=1
+        RCMFlag=0
         #args= "{} {} {} {} {}".format(lgNv, Ne_per_v, p, directed, weighted)
         args= "{} {} {} {} {} {}".format(lgNv, Ne_per_v, p, directed, weighted,RCMFlag)
         msg = "segmentedRMAT {} {} {} {} {}".format(lgNv, Ne_per_v, p, directed, weighted)
@@ -1118,7 +1118,7 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
         #if (cast(int,graph.directed)!=0)  :
         #DefaultRatio=0.75111
         DefaultRatio=0.01
-        RCMFlage=1
+        RCMFlage=0
         if (int(graph.directed)>0)  :
             if (int(graph.weighted)==0):
               # directed unweighted GraphD
