@@ -981,7 +981,9 @@ def graph_file_read(Ne:int, Nv:int,Ncol:int,directed:int, filename: str)  -> Uni
         RuntimeError
         """
         cmd = "segmentedGraphFile"
-        args="{} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename);
+        RCMFlag=0
+        #args="{} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename);
+        args="{} {} {} {} {} {}".format(Ne, Nv, Ncol,directed, filename,RCMFlag);
         #repMsg = generic_msg(msg)
         repMsg = generic_msg(cmd=cmd,args=args)
         if (int(Ncol) >2) :
@@ -999,7 +1001,6 @@ def graph_file_read(Ne:int, Nv:int,Ncol:int,directed:int, filename: str)  -> Uni
                return GraphUDW(*(cast(str,repMsg).split('+')))
            else:
                return GraphUD(*(cast(str,repMsg).split('+')))
-
 
 
 @typechecked
@@ -1076,7 +1077,9 @@ def rmat_gen (lgNv:int, Ne_per_v:int, p:float, directed: int,weighted:int) ->\
         RuntimeError
         """
         cmd = "segmentedRMAT"
-        args= "{} {} {} {} {}".format(lgNv, Ne_per_v, p, directed, weighted)
+        RCMFlage=0
+        #args= "{} {} {} {} {}".format(lgNv, Ne_per_v, p, directed, weighted)
+        args= "{} {} {} {} {} {}".format(lgNv, Ne_per_v, p, directed, weighted,RCMFlag)
         msg = "segmentedRMAT {} {} {} {} {}".format(lgNv, Ne_per_v, p, directed, weighted)
         #repMsg = generic_msg(msg)
         repMsg = generic_msg(cmd=cmd,args=args)
@@ -1113,12 +1116,15 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
         """
         cmd="segmentedGraphBFS"
         #if (cast(int,graph.directed)!=0)  :
-        DefaultRatio=0.85111
+        #DefaultRatio=0.75111
+        DefaultRatio=0.01
+        RCMFlage=0
         if (int(graph.directed)>0)  :
             if (int(graph.weighted)==0):
               # directed unweighted GraphD
               #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {}".format(
-              args = "{} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {}".format(
+                 RCMFlage,\
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
@@ -1127,7 +1133,8 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
             else:
               # directed weighted GraphDW
               #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {}".format(
-              args = "{} {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+                 RCMFlage,\
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
@@ -1138,7 +1145,8 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
             if (int(graph.weighted)==0):
               # undirected unweighted GraphUD
               #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
-              args = "{} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+                 RCMFlage,\
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
@@ -1149,7 +1157,8 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
             else:
               # undirected weighted GraphUDW 15
               #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
-              args = "{} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+              args = "{} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+                 RCMFlage,\
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
@@ -1171,7 +1180,6 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
         '''
         return create_pdarray(repMsg)
         #return (levelary,vertexary)
-
 
 @typechecked
 def graph_triangle (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW]) -> pdarray:

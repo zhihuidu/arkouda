@@ -1284,11 +1284,12 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
   }
 
 
+
 // directly read a graph from given file and build the SegGraph class in memory
   //proc segGraphFileMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
   proc segGraphFileMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       //var pn = Reflection.getRoutineName();
-      var (NeS,NvS,ColS,DirectedS, FileName) = payload.splitMsgToTuple(5);
+      var (NeS,NvS,ColS,DirectedS, FileName,RCMs) = payload.splitMsgToTuple(6);
       //writeln("======================Graph Reading=====================");
       //writeln(NeS,NvS,ColS,DirectedS, FileName);
       var Ne=NeS:int;
@@ -1297,16 +1298,18 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       var directed=DirectedS:int;
       var weighted=0:int;
       var timer: Timer;
+      var RCMFlag=RCMs:int;
       if NumCol>2 {
            weighted=1;
       }
 
+      timer.clear();
       timer.start();
       var src=makeDistArray(Ne,int);
       var dst=makeDistArray(Ne,int);
-      //var length=makeDistArray(Nv,int);
       var neighbour=makeDistArray(Nv,int);
       var start_i=makeDistArray(Nv,int);
+      var depth=makeDistArray(Nv,int);
 
       var e_weight = makeDistArray(Ne,int);
       var v_weight = makeDistArray(Nv,int);
@@ -1327,7 +1330,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       var sort_flag:int;
       var filesize:int;
 
-      proc readComplete() throws {
+      proc readComplete() throws {// we do not use this method now
            var f = open(FileName, iomode.r);
            var r = f.reader(kind=ionative);
            var dataarray:[0..Ne-1,0..NumCol-1] int;
@@ -1420,16 +1423,17 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       }//end readLinebyLine
       
       readLinebyLine();
-      //start_i=-1;
-      //start_iR=-1;
       timer.stop();
       writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
       writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
       writeln("$$$$$$$$$$$$ Reading File takes ", timer.elapsed()," $$$$$$$$$$$$$$$$$$$$$$$");
       writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
       writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+      timer.clear();
       timer.start();
-      proc twostep_sort() {
+
+
+      proc twostep_sort() {// we do not use this sorting method now
         iv = radixSortLSD_ranks(src);
         // permute into sorted order
         var tmpedges=src;
@@ -1522,10 +1526,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              }
 
              try {
-                 if totalDigits <=  4 { 
-                      iv = mergedArgsort( 4); 
+                 if totalDigits <=  2 { 
+                      iv = mergedArgsort( 2); 
                  }
-                 if (totalDigits >  4) && ( totalDigits <=  8) { 
+                 if (totalDigits >  2) && ( totalDigits <=  8) { 
                       iv =  mergedArgsort( 8); 
                  }
                  if (totalDigits >  8) && ( totalDigits <=  16) { 
@@ -1554,6 +1558,148 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
              return "success";
       }//end combine_sort
+
+
+      proc RCM() throws {
+            
+          var cmary: [0..Nv-1] int;
+          var indexary:[0..Nv-1] int;
+          depth=-1;
+          proc smallVertex() :int {
+                var tmpmindegree=1000000:int;
+                var minindex=0:int;
+                for i in 0..Nv-1 {
+                   if (neighbour[i]<tmpmindegree) && (neighbour[i]>0) {
+                      tmpmindegree=neighbour[i];
+                      minindex=i;
+                   }
+                }
+                return minindex;
+          }
+
+          var currentindex=0:int;
+          var x=smallVertex();
+          cmary[0]=x;
+          depth[x]=0;
+
+          //var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
+          //var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
+          var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
+          var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
+          SetCurF.add(x);
+          var numCurF=1:int;
+          var GivenRatio=0.001:int;
+          var topdown=0:int;
+          var bottomup=0:int;
+          var LF=1:int;
+          var cur_level=0:int;
+          
+          while (numCurF>0) {
+                //writeln("SetCurF=");
+                //writeln(SetCurF);
+                coforall loc in Locales  with (ref SetNextF,+ reduce topdown, + reduce bottomup) {
+                   on loc {
+                       ref srcf=src;
+                       ref df=dst;
+                       ref nf=neighbour;
+                       ref sf=start_i;
+
+                       var edgeBegin=src.localSubdomain().low;
+                       var edgeEnd=src.localSubdomain().high;
+                       var vertexBegin=src[edgeBegin];
+                       var vertexEnd=src[edgeEnd];
+
+                       proc xlocal(x :int, low:int, high:int):bool{
+                                  if (low<=x && x<=high) {
+                                      return true;
+                                  } else {
+                                      return false;
+                                  }
+                       }
+                       var switchratio=(numCurF:real)/nf.size:real;
+                       if (switchratio<GivenRatio) {//top down
+                           topdown+=1;
+                           forall i in SetCurF with (ref SetNextF) {
+                              if ((xlocal(i,vertexBegin,vertexEnd)) ) {// current edge has the vertex
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF){
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              } 
+                           }//end coforall
+                       }else {// bottom up
+                           bottomup+=1;
+                           forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                              if depth[i]==-1 {
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF){
+                                         if (SetCurF.contains(j)) {
+                                               depth[i]=cur_level+1;
+                                               SetNextF.add(i);
+                                         }
+                                  }
+
+                              }
+                           }
+                       }
+                   }//end on loc
+                }//end coforall loc
+                cur_level+=1;
+                //numCurF=SetNextF.getSize();
+                numCurF=SetNextF.size;
+
+                if (numCurF>0) {
+                    var tmpary:[0..numCurF-1] int;
+                    var sortary:[0..numCurF-1] int;
+                    var numary:[0..numCurF-1] int;
+                    var tmpa=0:int;
+                    forall (a,b)  in zip (tmpary,SetNextF.toArray()) {
+                        a=b;
+                    }
+                    forall i in 0..numCurF-1 {
+                         numary[i]=neighbour[tmpary[i]];
+                    }
+
+                    var tmpiv = argsortDefault(numary);
+                    sortary=tmpary[tmpiv];
+                    cmary[currentindex+1..currentindex+numCurF]=sortary;
+                    currentindex=currentindex+numCurF;
+                }
+
+
+                //SetCurF<=>SetNextF;
+                SetCurF=SetNextF;
+                SetNextF.clear();
+          }//end while  
+
+          cmary.reverse();
+          forall i in 0..Nv-1{
+              indexary[cmary[i]]=i;
+          }
+
+          var tmpary:[0..Ne-1] int;
+          forall i in 0..Ne-1 {
+                  tmpary[i]=indexary[src[i]];
+          }
+          src=tmpary;
+          forall i in 0..Ne-1 {
+                  tmpary[i]=indexary[dst[i]];
+          }
+          dst=tmpary;
+
+          return "success";
+      }//end RCM
 
       proc set_neighbour(){ 
           for i in 0..Ne-1 do {
@@ -1639,10 +1785,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              } 
 
              try {
-                 if totalDigits <=  4 { 
-                      ivR = mergedArgsort( 4); 
+                 if totalDigits <=  2 { 
+                      ivR = mergedArgsort( 2); 
                  }
-                 if (totalDigits >  4) && ( totalDigits <=  8) { 
+                 if (totalDigits >  2) && ( totalDigits <=  8) { 
                       ivR =  mergedArgsort( 8); 
                  }
                  if (totalDigits >  8) && ( totalDigits <=  16) { 
@@ -1675,6 +1821,182 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              }
           }
           //twostep_sortR();
+          proc RCM_u() throws {
+            
+              var cmary: [0..Nv-1] int;
+              var indexary:[0..Nv-1] int;
+              var depth:[0..Nv-1] int;
+              depth=-1;
+              proc smallVertex() :int {
+                    var tmpmindegree=1000000:int;
+                    var minindex=0:int;
+                    for i in 0..Nv-1 {
+                       if (neighbour[i]<tmpmindegree) && (neighbour[i]>0) {
+                          tmpmindegree=neighbour[i];
+                          minindex=i;
+                       }
+                    }
+                    return minindex;
+              }
+
+              var currentindex=0:int;
+              var x=smallVertex();
+              cmary[0]=x;
+              depth[x]=0;
+
+              //var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
+              //var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
+              var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
+              var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
+              SetCurF.add(x);
+              var numCurF=1:int;
+              var GivenRatio=0.001:int;
+              var topdown=0:int;
+              var bottomup=0:int;
+              var LF=1:int;
+              var cur_level=0:int;
+          
+              while (numCurF>0) {
+                    //writeln("SetCurF=");
+                    //writeln(SetCurF);
+                    coforall loc in Locales  with (ref SetNextF,+ reduce topdown, + reduce bottomup) {
+                       on loc {
+                           ref srcf=src;
+                           ref df=dst;
+                           ref nf=neighbour;
+                           ref sf=start_i;
+
+                           ref srcfR=srcR;
+                           ref dfR=dstR;
+                           ref nfR=neighbourR;
+                           ref sfR=start_iR;
+
+                           var edgeBegin=src.localSubdomain().low;
+                           var edgeEnd=src.localSubdomain().high;
+                           var vertexBegin=src[edgeBegin];
+                           var vertexEnd=src[edgeEnd];
+                           var vertexBeginR=srcR[edgeBegin];
+                           var vertexEndR=srcR[edgeEnd];
+
+                           proc xlocal(x :int, low:int, high:int):bool{
+                                      if (low<=x && x<=high) {
+                                          return true;
+                                      } else {
+                                          return false;
+                                      }
+                           }
+                           var switchratio=(numCurF:real)/nf.size:real;
+                           if (switchratio<GivenRatio) {//top down
+                               topdown+=1;
+                               forall i in SetCurF with (ref SetNextF) {
+                                  if ((xlocal(i,vertexBegin,vertexEnd)) ) {// current edge has the vertex
+                                      var    numNF=nf[i];
+                                      var    edgeId=sf[i];
+                                      var nextStart=max(edgeId,edgeBegin);
+                                      var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                      ref NF=df[nextStart..nextEnd];
+                                      forall j in NF with (ref SetNextF){
+                                             if (depth[j]==-1) {
+                                                   depth[j]=cur_level+1;
+                                                   SetNextF.add(j);
+                                             }
+                                      }
+                                  } 
+                                  if ((xlocal(i,vertexBeginR,vertexEndR)) )  {
+                                      var    numNF=nfR[i];
+                                      var    edgeId=sfR[i];
+                                      var nextStart=max(edgeId,edgeBegin);
+                                      var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                      ref NF=dfR[nextStart..nextEnd];
+                                      forall j in NF with (ref SetNextF)  {
+                                             if (depth[j]==-1) {
+                                                   depth[j]=cur_level+1;
+                                                   SetNextF.add(j);
+                                             }
+                                      }
+                                  }
+                               }//end coforall
+                           }else {// bottom up
+                               bottomup+=1;
+                               forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                                  if depth[i]==-1 {
+                                      var    numNF=nf[i];
+                                      var    edgeId=sf[i];
+                                      var nextStart=max(edgeId,edgeBegin);
+                                      var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                      ref NF=df[nextStart..nextEnd];
+                                      forall j in NF with (ref SetNextF){
+                                             if (SetCurF.contains(j)) {
+                                                   depth[i]=cur_level+1;
+                                                   SetNextF.add(i);
+                                             }
+                                      }
+
+                                  }
+                               }
+                               forall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
+                                  if depth[i]==-1 {
+                                      var    numNF=nfR[i];
+                                      var    edgeId=sfR[i];
+                                      var nextStart=max(edgeId,edgeBegin);
+                                      var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                      ref NF=dfR[nextStart..nextEnd];
+                                      forall j in NF with (ref SetNextF)  {
+                                             if (SetCurF.contains(j)) {
+                                                   depth[i]=cur_level+1;
+                                                   SetNextF.add(i);
+                                             }
+                                      }
+                                  }
+                               }
+                           }
+                       }//end on loc
+                    }//end coforall loc
+                    cur_level+=1;
+                    //numCurF=SetNextF.getSize();
+                    numCurF=SetNextF.size;
+
+                    if (numCurF>0) {
+                        var tmpary:[0..numCurF-1] int;
+                        var sortary:[0..numCurF-1] int;
+                        var numary:[0..numCurF-1] int;
+                        var tmpa=0:int;
+                        forall (a,b)  in zip (tmpary,SetNextF.toArray()) {
+                            a=b;
+                        }
+                        forall i in 0..numCurF-1 {
+                             numary[i]=neighbour[tmpary[i]];
+                        }
+
+                        var tmpiv = argsortDefault(numary);
+                        sortary=tmpary[tmpiv];
+                        cmary[currentindex+1..currentindex+numCurF]=sortary;
+                        currentindex=currentindex+numCurF;
+                    }
+
+
+                    //SetCurF<=>SetNextF;
+                    SetCurF=SetNextF;
+                    SetNextF.clear();
+              }//end while  
+    
+              cmary.reverse();
+              forall i in 0..Nv-1{
+                  indexary[cmary[i]]=i;
+              }
+    
+              var tmpary:[0..Ne-1] int;
+              forall i in 0..Ne-1 {
+                      tmpary[i]=indexary[src[i]];
+              }
+              src=tmpary;
+              forall i in 0..Ne-1 {
+                      tmpary[i]=indexary[dst[i]];
+              }
+              dst=tmpary;
+ 
+              return "success";
+          }//end RCM_u
           coforall loc in Locales  {
               on loc {
                   forall i in srcR.localSubdomain(){
@@ -1686,7 +2008,37 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           combine_sortR();
           set_neighbourR();
 
+          if (RCMFlag>0) {
+             RCM_u();
+             neighbour=0;
+             start_i=-1;
+             combine_sort();
+             set_neighbour();
+             coforall loc in Locales  {
+                  on loc {
+                      forall i in srcR.localSubdomain(){
+                            srcR[i]=dst[i];
+                            dstR[i]=src[i];
+                       }
+                  }
+              }
+              combine_sortR();
+              set_neighbourR();
+
+          }   
       }//end of undirected
+      else {
+
+        if (RCMFlag>0) {
+           RCM();
+           neighbour=0;
+           start_i=-1;
+           combine_sort();
+           set_neighbour();
+
+        }
+
+      }
 
 
       var ewName ,vwName:string;
@@ -2795,20 +3147,20 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
 
 
-
   //proc segBFSMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
   proc segBFSMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       var repMsg: string;
-      var DefaultRatio=0.75111;
+      var NoRatio=-1:int;
       //var (n_verticesN,n_edgesN,directedN,weightedN,srcN, dstN, startN, neighbourN,vweightN,eweightN, rootN )
       //    = payload.decode().splitMsgToTuple(10);
-      var (n_verticesN,n_edgesN,directedN,weightedN,restpart )
-          = payload.splitMsgToTuple(5);
+      var (RCMs,n_verticesN,n_edgesN,directedN,weightedN,restpart )
+          = payload.splitMsgToTuple(6);
       var Nv=n_verticesN:int;
       var Ne=n_edgesN:int;
       var Directed=directedN:int;
       var Weighted=weightedN:int;
       var depthName:string;
+      var RCMFlag=RCMs:int;
       var timer:Timer;
       timer.start();
       var depth=makeDistArray(Nv,int);
@@ -2823,6 +3175,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       var root:int;
       var srcN, dstN, startN, neighbourN,vweightN,eweightN, rootN :string;
       var srcRN, dstRN, startRN, neighbourRN:string;
+       
 
 
       proc bfs_kernel(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int):string throws{
@@ -3205,7 +3558,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                    CMaxSize=MaxBufSize[i];
               }
           }
-          writeln("CMaxSize=",CMaxSize);
+          //writeln("CMaxSize=",CMaxSize);
           var localArrayG=makeDistArray(numLocales*CMaxSize,int);//current frontier elements
           //var localArrayNG=makeDistArray(numLocales*CMaxSize,int);// next frontier in the same locale
           //var sendArrayG=makeDistArray(numLocales*CMaxSize,int);// next frontier in other locales
@@ -3239,7 +3592,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                  if (xlocal(root,vertexBeginG[here.id],vertexEndG[here.id]) ) {
                    localArrayG[CMaxSize*here.id]=root;
                    LPG[here.id]=1;
-                   writeln("1 Add root=",root," into locale ",here.id);
+                   //writeln("1 Add root=",root," into locale ",here.id);
                  }
               }
           }
@@ -3259,7 +3612,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                    var RemoteSet=new set(int,parSafe = true);//use set to keep the next remote frontier
 
                    var mystart=here.id*CMaxSize;//start index 
-                   writeln("1-1 my locale=",here.id, ",has ", LPG[here.id], " elements=",localArrayG[mystart..mystart+LPG[here.id]-1],",startposition=",mystart);
+                   //writeln("1-1 my locale=",here.id, ",has ", LPG[here.id], " elements=",localArrayG[mystart..mystart+LPG[here.id]-1],",startposition=",mystart);
                    coforall i in localArrayG[mystart..mystart+LPG[here.id]-1] with (ref LocalSet, ref RemoteSet)  {
                             // each locale just processes its local vertices
                               if xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) {
@@ -3276,13 +3629,13 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                                     //localArrayNG[mystart+LPNG[here.id]]=j; 
                                                     //LPNG[here.id]+=1;
                                                     LocalSet.add(j);
-                                                    writeln("2 My locale=", here.id," Add ", j, " into local");
+                                                    //writeln("2 My locale=", here.id," Add ", j, " into local");
                                                } 
                                                if (xremote(j,HvertexBeginG[here.id],TvertexEndG[here.id])) {
                                                     //sendArrayG[mystart+SPG[here.id]]=j;                 
                                                     //SPG[here.id]+=1;
                                                     RemoteSet.add(j);
-                                                    writeln("3 My locale=", here.id," Add ", j, " into remote");
+                                                    //writeln("3 My locale=", here.id," Add ", j, " into remote");
                                                }
                                          }
                                   }
@@ -3290,20 +3643,19 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        
                               if (RemoteSet.size>0) {//there is vertex to be sent
                                   remoteNum[here.id]+=RemoteSet.size;
-                                  writeln("6-0 My locale=", here.id," there are remote element =",RemoteSet);
+                                  //writeln("6-0 My locale=", here.id," there are remote element =",RemoteSet);
                                   coforall localeNum in 0..numLocales-1  { 
                                          var ind=0:int;
                                          //for k in RemoteSet with ( +reduce ind) (var agg= newDstAggregator(int)) {
                                          var agg= newDstAggregator(int); 
                                          for k in RemoteSet {
-                                                writeln("6-2 My locale=", here.id," test remote element ", k);
+                                                //writeln("6-2 My locale=", here.id," test remote element ", k);
                                                 if (xlocal(k,vertexBeginG[localeNum],vertexEndG[localeNum])){
                                                      agg.copy(recvArrayG[localeNum*numLocales*CMaxSize+
                                                                          here.id*CMaxSize+ind] ,k);
                                                      ind+=1;
                                                      
-                                                     writeln("6 My locale=", here.id,"send", k, "to locale= ",localeNum," number=", ind, " send element=", recvArrayG[localeNum*numLocales*CMaxSize+
-                                                                         here.id*CMaxSize+ind-1]);
+                                                     //writeln("6 My locale=", here.id,"send", k, "to locale= ",localeNum," number=", ind, " send element=", recvArrayG[localeNum*numLocales*CMaxSize+ here.id*CMaxSize+ind-1]);
                                                 }
                                          }
                                          RPG[localeNum*numLocales+here.id]=ind;
@@ -3317,17 +3669,17 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        localNum[here.id]+=LocalSet.size;
                        var mystart=here.id*CMaxSize;
                        forall (a,b)  in zip (localArrayG[mystart..mystart+LocalSet.size-1],LocalSet.toArray()) {
-                              writeln("7-0 My locale=", here.id,"  a=",a, " b=",b);
+                              //writeln("7-0 My locale=", here.id,"  a=",a, " b=",b);
                               a=b;
                        }
                        var tmp=0;
                        for i in LocalSet {
-                              writeln("7-1 My locale=", here.id,"  element i=",i," tmp=",tmp);
+                              //writeln("7-1 My locale=", here.id,"  element i=",i," tmp=",tmp);
                               //localArrayG[mystart+tmp]=i;
-                              writeln("7-2 My locale=", here.id,"  local array [tmp]=",localArrayG[mystart+tmp]," tmp=",tmp);
+                              //writeln("7-2 My locale=", here.id,"  local array [tmp]=",localArrayG[mystart+tmp]," tmp=",tmp);
                               tmp+=1;
                        }
-                       writeln("7 My locale=", here.id,"  local set=",LocalSet, "to local array and size= ",LocalSet.size, " local array=",localArrayG[mystart..mystart+LocalSet.size-1]);
+                       //writeln("7 My locale=", here.id,"  local set=",LocalSet, "to local array and size= ",LocalSet.size, " local array=",localArrayG[mystart..mystart+LocalSet.size-1]);
                    }
                    LocalSet.clear();
                    RemoteSet.clear();
@@ -3343,24 +3695,24 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                recvArrayG[CMaxSize*numLocales*i+here.id*CMaxSize..
                                           CMaxSize*numLocales*i+here.id*CMaxSize+RPG[numLocales*i+here.id]-1];
                            LPG[here.id]=LPG[here.id]+RPG[numLocales*i+here.id];
-                           writeln("8 My locale=", here.id," after colloect array=",localArrayG[mystart..mystart+LPG[here.id]-1]);
+                           //writeln("8 My locale=", here.id," after colloect array=",localArrayG[mystart..mystart+LPG[here.id]-1]);
                        }
                          
                    }
                   }//end on loc
               }//end coforall loc
               numCurF=0;
-              writeln("10-0 LPG=",LPG);
+              //writeln("10-0 LPG=",LPG);
               for iL in 0..(numLocales-1)  {
                    if LPG[iL] >0 {
-                       writeln("10  locale ",iL, " has ",LPG[iL], " elements");
+                       //writeln("10  locale ",iL, " has ",LPG[iL], " elements");
                        numCurF=1;
                        break;
                    }
               }
               RPG=0;
               cur_level+=1;
-              writeln("cur level=",cur_level);
+              //writeln("cur level=",cur_level);
           }//end while  
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
@@ -3442,7 +3794,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                    CMaxSize=MaxBufSize[i];
               }
           }
-          writeln("CMaxSize=",CMaxSize);
+          //writeln("CMaxSize=",CMaxSize);
           var localArrayG=makeDistArray(numLocales*CMaxSize,int);//current frontier elements
           //var localArrayNG=makeDistArray(numLocales*CMaxSize,int);// next frontier in the same locale
           //var sendArrayG=makeDistArray(numLocales*CMaxSize,int);// next frontier in other locales
@@ -3477,7 +3829,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                  xlocal(root,vertexBeginRG[here.id],vertexEndRG[here.id])) {
                    localArrayG[CMaxSize*here.id]=root;
                    LPG[here.id]=1;
-                   writeln("1 Add root=",root," into locale ",here.id);
+                   //writeln("1 Add root=",root," into locale ",here.id);
                  }
               }
           }
@@ -3503,7 +3855,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                    var RemoteSet=new set(int,parSafe = true);//use set to keep the next remote frontier
 
                    var mystart=here.id*CMaxSize;//start index 
-                   writeln("1-1 my locale=",here.id, ",has ", LPG[here.id], " elements=",localArrayG[mystart..mystart+LPG[here.id]-1],",startposition=",mystart);
+                   //writeln("1-1 my locale=",here.id, ",has ", LPG[here.id], " elements=",localArrayG[mystart..mystart+LPG[here.id]-1],",startposition=",mystart);
                    coforall i in localArrayG[mystart..mystart+LPG[here.id]-1] with (ref LocalSet, ref RemoteSet)  {
                             // each locale just processes its local vertices
                               if xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) {
@@ -3521,14 +3873,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                                     //localArrayNG[mystart+LPNG[here.id]]=j; 
                                                     //LPNG[here.id]+=1;
                                                     LocalSet.add(j);
-                                                    writeln("2 My locale=", here.id," Add ", j, " into local");
+                                                    //writeln("2 My locale=", here.id," Add ", j, " into local");
                                                } 
                                                if (xremote(j,HvertexBeginG[here.id],TvertexEndG[here.id]) ||
                                                    xremote(j,HvertexBeginRG[here.id],TvertexEndRG[here.id])) {
                                                     //sendArrayG[mystart+SPG[here.id]]=j;                 
                                                     //SPG[here.id]+=1;
                                                     RemoteSet.add(j);
-                                                    writeln("3 My locale=", here.id," Add ", j, " into remote");
+                                                    //writeln("3 My locale=", here.id," Add ", j, " into remote");
                                                }
                                          }
                                   }
@@ -3547,14 +3899,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                                     //localArrayNG[mystart+LPNG[here.id]]=j; 
                                                     //LPNG[here.id]+=1;
                                                     LocalSet.add(j);
-                                                    writeln("4 reverse My locale=", here.id,"Add ", j, "into local");
+                                                    //writeln("4 reverse My locale=", here.id,"Add ", j, "into local");
                                                } 
                                                if (xremote(j,HvertexBeginG[here.id],TvertexEndG[here.id]) ||
                                                    xremote(j,HvertexBeginRG[here.id],TvertexEndRG[here.id])) {
                                                     //sendArrayG[mystart+SPG[here.id]]=j;                 
                                                     //SPG[here.id]+=1;
                                                     RemoteSet.add(j);
-                                                    writeln("5 reverse My locale=", here.id,"Add ", j, "into remote");
+                                                    //writeln("5 reverse My locale=", here.id,"Add ", j, "into remote");
                                                }
                                          }
                                   }
@@ -3562,21 +3914,20 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        
                               if (RemoteSet.size>0) {//there is vertex to be sent
                                   remoteNum[here.id]+=RemoteSet.size;
-                                  writeln("6-0 My locale=", here.id," there are remote element =",RemoteSet);
+                                  //writeln("6-0 My locale=", here.id," there are remote element =",RemoteSet);
                                   coforall localeNum in 0..numLocales-1  { 
                                          var ind=0:int;
                                          //for k in RemoteSet with ( +reduce ind) (var agg= newDstAggregator(int)) {
                                          var agg= newDstAggregator(int); 
                                          for k in RemoteSet {
-                                                writeln("6-2 My locale=", here.id," test remote element ", k);
+                                                //writeln("6-2 My locale=", here.id," test remote element ", k);
                                                 if (xlocal(k,vertexBeginG[localeNum],vertexEndG[localeNum])||
                                                     xlocal(k,vertexBeginRG[localeNum],vertexEndRG[localeNum])){
                                                      agg.copy(recvArrayG[localeNum*numLocales*CMaxSize+
                                                                          here.id*CMaxSize+ind] ,k);
                                                      ind+=1;
                                                      
-                                                     writeln("6 My locale=", here.id,"send", k, "to locale= ",localeNum," number=", ind, " send element=", recvArrayG[localeNum*numLocales*CMaxSize+
-                                                                         here.id*CMaxSize+ind-1]);
+                                                     //writeln("6 My locale=", here.id,"send", k, "to locale= ",localeNum," number=", ind, " send element=", recvArrayG[localeNum*numLocales*CMaxSize+ here.id*CMaxSize+ind-1]);
                                                 }
                                          }
                                          RPG[localeNum*numLocales+here.id]=ind;
@@ -3590,17 +3941,17 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        localNum[here.id]+=LocalSet.size;
                        var mystart=here.id*CMaxSize;
                        forall (a,b)  in zip (localArrayG[mystart..mystart+LocalSet.size-1],LocalSet.toArray()) {
-                              writeln("7-0 My locale=", here.id,"  a=",a, " b=",b);
+                              //writeln("7-0 My locale=", here.id,"  a=",a, " b=",b);
                               a=b;
                        }
                        var tmp=0;
                        for i in LocalSet {
-                              writeln("7-1 My locale=", here.id,"  element i=",i," tmp=",tmp);
+                              //writeln("7-1 My locale=", here.id,"  element i=",i," tmp=",tmp);
                               //localArrayG[mystart+tmp]=i;
-                              writeln("7-2 My locale=", here.id,"  local array [tmp]=",localArrayG[mystart+tmp]," tmp=",tmp);
+                              //writeln("7-2 My locale=", here.id,"  local array [tmp]=",localArrayG[mystart+tmp]," tmp=",tmp);
                               tmp+=1;
                        }
-                       writeln("7 My locale=", here.id,"  local set=",LocalSet, "to local array and size= ",LocalSet.size, " local array=",localArrayG[mystart..mystart+LocalSet.size-1]);
+                       //writeln("7 My locale=", here.id,"  local set=",LocalSet, "to local array and size= ",LocalSet.size, " local array=",localArrayG[mystart..mystart+LocalSet.size-1]);
                    }
                    LocalSet.clear();
                    RemoteSet.clear();
@@ -3616,24 +3967,24 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                recvArrayG[CMaxSize*numLocales*i+here.id*CMaxSize..
                                           CMaxSize*numLocales*i+here.id*CMaxSize+RPG[numLocales*i+here.id]-1];
                            LPG[here.id]=LPG[here.id]+RPG[numLocales*i+here.id];
-                           writeln("8 My locale=", here.id," after colloect array=",localArrayG[mystart..mystart+LPG[here.id]-1]);
+                           //writeln("8 My locale=", here.id," after colloect array=",localArrayG[mystart..mystart+LPG[here.id]-1]);
                        }
                          
                    }
                   }//end on loc
               }//end coforall loc
               numCurF=0;
-              writeln("10-0 LPG=",LPG);
+              //writeln("10-0 LPG=",LPG);
               for iL in 0..(numLocales-1)  {
                    if LPG[iL] >0 {
-                       writeln("10  locale ",iL, " has ",LPG[iL], " elements");
+                       //writeln("10  locale ",iL, " has ",LPG[iL], " elements");
                        numCurF=1;
                        break;
                    }
               }
               RPG=0;
               cur_level+=1;
-              writeln("cur level=",cur_level);
+              //writeln("cur level=",cur_level);
           }//end while  
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
@@ -3662,12 +4013,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           //var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
           SetCurF.add(root);
           var numCurF=1:int;
+          var topdown=0:int;
+          var bottomup=0:int;
 
           //while (!SetCurF.isEmpty()) {
           while (numCurF>0) {
                 //writeln("SetCurF=");
                 //writeln(SetCurF);
-                coforall loc in Locales  with (ref SetNextF) {
+                coforall loc in Locales  with (ref SetNextF,+ reduce topdown, + reduce bottomup) {
                    on loc {
                        ref srcf=src;
                        ref df=dst;
@@ -3695,6 +4048,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        }
                        var switchratio=(numCurF:real)/nf.size:real;
                        if (switchratio<GivenRatio) {//top down
+                           topdown+=1;
                            forall i in SetCurF with (ref SetNextF) {
                               if ((xlocal(i,vertexBegin,vertexEnd)) || (LF==0)) {// current edge has the vertex
                                   var    numNF=nf[i];
@@ -3724,6 +4078,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                               }
                            }//end coforall
                        }else {// bottom up
+                           bottomup+=1;
                            forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
                               if depth[i]==-1 {
                                   var    numNF=nf[i];
@@ -3771,6 +4126,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$number of top down = ",topdown, " number of bottom up=", bottomup,"$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           return "success";
@@ -3791,12 +4147,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
           SetCurF.add(root);
           var numCurF=1:int;
+          var topdown=0:int;
+          var bottomup=0:int;
 
           //while (!SetCurF.isEmpty()) {
           while (numCurF>0) {
                 //writeln("SetCurF=");
                 //writeln(SetCurF);
-                coforall loc in Locales  with (ref SetNextF) {
+                coforall loc in Locales  with (ref SetNextF,+ reduce topdown, + reduce bottomup) {
                    on loc {
                        ref srcf=src;
                        ref df=dst;
@@ -3825,6 +4183,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                        var switchratio=(numCurF:real)/nf.size:real;
                        if (switchratio<GivenRatio) {//top down
+                           topdown+=1;
                            forall i in SetCurF with (ref SetNextF) {
                               if ((xlocal(i,vertexBegin,vertexEnd)) ||( LF==0)) {// current edge has the vertex
                                   var    numNF=nf[i];
@@ -3854,6 +4213,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                               }
                            }//end coforall
                        }else {//bottom up
+                           bottomup+=1;
                            forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
                               if depth[i]==-1 {
                                   var    numNF=nf[i];
@@ -3901,6 +4261,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$number of top down = ",topdown, " number of bottom up=", bottomup,"$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           return "success";
@@ -3921,12 +4282,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           //var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
           SetCurF.add(root);
           var numCurF=1:int;
+          var topdown=0:int;
+          var bottomup=0:int;
 
           //while (!SetCurF.isEmpty()) {
           while (numCurF>0) {
                 //writeln("SetCurF=");
                 //writeln(SetCurF);
-                coforall loc in Locales  with (ref SetNextF) {
+                coforall loc in Locales  with (ref SetNextF,+ reduce topdown, + reduce bottomup) {
                    on loc {
                        ref srcf=src;
                        ref df=dst;
@@ -3955,6 +4318,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                        var switchratio=(numCurF:real)/nf.size:real;
                        if (switchratio<GivenRatio) {//top down
+                           topdown+=1;
                            forall i in SetCurF with (ref SetNextF) {
                               if ((xlocal(i,vertexBegin,vertexEnd)) ||( LF==0)) {// current edge has the vertex
                                   var    numNF=nf[i];
@@ -3984,6 +4348,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                               }
                            }//end coforall
                        } else {//bottom up
+                           bottomup+=1;
                            forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
                               if depth[i]==-1 {
                                   var    numNF=nf[i];
@@ -4032,6 +4397,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$$$number of top down = ",topdown, " number of bottom up=", bottomup,"$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           return "success";
@@ -4043,6 +4409,8 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                         neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int,GivenRatio:real):string throws{
           var cur_level=0;
           var numCurF=1:int;//flag for stopping loop
+          var topdown=0:int;
+          var bottomup=0:int;
 
 
           var edgeBeginG=makeDistArray(numLocales,int);//each locale's starting edge ID
@@ -4066,7 +4434,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           remoteNum=0;
 
           var MaxBufSize=makeDistArray(numLocales,int);//temp array to calculate global max
-          coforall loc in Locales   {
+          coforall loc in Locales with (+ reduce topdown, + reduce bottomup)  {
               on loc {
                  edgeBeginG[here.id]=src.localSubdomain().low;
                  edgeEndG[here.id]=src.localSubdomain().high;
@@ -4149,7 +4517,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           }
 
           while numCurF >0 {
-              coforall loc in Locales   {
+              coforall loc in Locales with (+ reduce bottomup, + reduce topdown)   {
                   on loc {
                    ref srcf=src;
                    ref df=dst;
@@ -4174,7 +4542,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                    var   switchratio=(numCurF:real)/nf.size:real;
                    if (switchratio<GivenRatio) {//top down
-
+                       topdown+=1;
                        forall i in localArrayG[mystart..mystart+LPG[here.id]-1] 
                                                    with (ref LocalSet, ref RemoteSet)  {
                             // each locale just processes its local vertices
@@ -4255,7 +4623,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        }//end coforall
                    }// end of top down
                    else {  //bottom up
-
+                       bottomup+=1;
                        proc FrontierHas(x:int):bool{
                             var returnval=false;
                             coforall i in 0..numLocales-1 with (ref returnval) {
@@ -4386,6 +4754,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$number of top-down = ", topdown, " number of bottom-up=",bottomup, "$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           var TotalLocal=0:int;
@@ -4411,12 +4780,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           //var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
           SetCurF.add(root);
           var numCurF=1:int;
+          var bottomup=0:int;
+          var topdown=0:int;
 
           //while (!SetCurF.isEmpty()) {
           while (numCurF>0) {
                 //writeln("SetCurF=");
                 //writeln(SetCurF);
-                coforall loc in Locales  with (ref SetNextF) {
+                coforall loc in Locales  with (ref SetNextF,+ reduce topdown, + reduce bottomup) {
                    on loc {
                        ref srcf=src;
                        ref df=dst;
@@ -4444,6 +4815,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        }
                        var switchratio=(numCurF:real)/nf.size:real;
                        if (switchratio<GivenRatio) {//top down
+                           topdown+=1;
                            coforall i in SetCurF with (ref SetNextF) {
                               if ((xlocal(i,vertexBegin,vertexEnd)) || (LF==0)) {// current edge has the vertex
                                   var    numNF=nf[i];
@@ -4473,6 +4845,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                               }
                            }//end coforall
                        }else {// bottom up
+                           bottomup+=1;
                            coforall i in vertexBegin..vertexEnd  with (ref SetNextF) {
                               if depth[i]==-1 {
                                   var    numNF=nf[i];
@@ -4520,6 +4893,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$number of top-down = ", topdown, " number of bottom-up=",bottomup, "$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           return "success";
@@ -4541,11 +4915,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           SetCurF.add(root);
           var numCurF=1:int;
 
+          var bottomup=0:int;
+          var topdown=0:int;
+
           //while (!SetCurF.isEmpty()) {
           while (numCurF>0) {
                 //writeln("SetCurF=");
                 //writeln(SetCurF);
-                coforall loc in Locales  with (ref SetNextF) {
+                coforall loc in Locales  with (ref SetNextF,+ reduce topdown, + reduce bottomup) {
                    on loc {
                        ref srcf=src;
                        ref df=dst;
@@ -4574,6 +4951,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                        var switchratio=(numCurF:real)/nf.size:real;
                        if (switchratio<GivenRatio) {//top down
+                           topdown+=1;
                            coforall i in SetCurF with (ref SetNextF) {
                               if ((xlocal(i,vertexBegin,vertexEnd)) ||( LF==0)) {// current edge has the vertex
                                   var    numNF=nf[i];
@@ -4603,6 +4981,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                               }
                            }//end coforall
                        }else {//bottom up
+                           bottomup+=1;
                            coforall i in vertexBegin..vertexEnd  with (ref SetNextF) {
                               if depth[i]==-1 {
                                   var    numNF=nf[i];
@@ -4650,6 +5029,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$number of top-down = ", topdown, " number of bottom-up=",bottomup, "$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           return "success";
@@ -4670,12 +5050,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           //var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
           SetCurF.add(root);
           var numCurF=1:int;
+          var bottomup=0:int;
+          var topdown=0:int;
 
           //while (!SetCurF.isEmpty()) {
           while (numCurF>0) {
                 //writeln("SetCurF=");
                 //writeln(SetCurF);
-                coforall loc in Locales  with (ref SetNextF) {
+                coforall loc in Locales  with (ref SetNextF,+ reduce topdown, + reduce bottomup) {
                    on loc {
                        ref srcf=src;
                        ref df=dst;
@@ -4704,6 +5086,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                        var switchratio=(numCurF:real)/nf.size:real;
                        if (switchratio<GivenRatio) {//top down
+                           topdown+=1;
                            coforall i in SetCurF with (ref SetNextF) {
                               if ((xlocal(i,vertexBegin,vertexEnd)) ||( LF==0)) {// current edge has the vertex
                                   var    numNF=nf[i];
@@ -4733,6 +5116,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                               }
                            }//end coforall
                        } else {//bottom up
+                           bottomup+=1;
                            coforall i in vertexBegin..vertexEnd  with (ref SetNextF) {
                               if depth[i]==-1 {
                                   var    numNF=nf[i];
@@ -4781,6 +5165,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$number of top-down = ", topdown, " number of bottom-up=",bottomup, "$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           return "success";
@@ -4792,6 +5177,8 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                         neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int,GivenRatio:real):string throws{
           var cur_level=0;
           var numCurF=1:int;//flag for stopping loop
+          var topdown=0:int;
+          var bottomup=0:int;
 
 
           var edgeBeginG=makeDistArray(numLocales,int);//each locale's starting edge ID
@@ -4898,7 +5285,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           }
 
           while numCurF >0 {
-              coforall loc in Locales   {
+              coforall loc in Locales with (+ reduce topdown, + reduce bottomup)  {
                   on loc {
                    ref srcf=src;
                    ref df=dst;
@@ -4923,7 +5310,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                    var   switchratio=(numCurF:real)/nf.size:real;
                    if (switchratio<GivenRatio) {//top down
-
+                       topdown+=1;
                        coforall i in localArrayG[mystart..mystart+LPG[here.id]-1] 
                                                    with (ref LocalSet, ref RemoteSet)  {
                             // each locale just processes its local vertices
@@ -5004,7 +5391,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                        }//end coforall
                    }// end of top down
                    else {  //bottom up
-
+                       bottomup+=1;
                        proc FrontierHas(x:int):bool{
                             var returnval=false;
                             coforall i in 0..numLocales-1 with (ref returnval) {
@@ -5136,6 +5523,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$Search Radius = ", cur_level+1,"$$$$$$$$$$$$$$$$$$$$$$");
+          writeln("$$$$$$$$number of top-down = ", topdown, " number of bottom-up=",bottomup, "$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           writeln("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$");
           var TotalLocal=0:int;
@@ -5167,6 +5555,9 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                (srcN, dstN, startN, neighbourN,vweightN,eweightN, rootN)=
                    restpart.splitMsgToTuple(7);
               root=rootN:int;
+              if (RCMFlag>0) {
+                  root=0;
+              }
               depth[root]=0;
               var ag = new owned SegGraphDW(Nv,Ne,Directed,Weighted,srcN,dstN,
                                  startN,neighbourN,vweightN,eweightN, st);
@@ -5179,6 +5570,9 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
               var ag = new owned SegGraphD(Nv,Ne,Directed,Weighted,srcN,dstN,
                       startN,neighbourN,st);
               root=rootN:int;
+              if (RCMFlag>0) {
+                  root=0;
+              }
               depth[root]=0;
               _d1_bfs_kernel(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a);
               repMsg=return_depth();
@@ -5194,11 +5588,15 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                       srcRN,dstRN, startRN,neighbourRN,
                       vweightN,eweightN, st);
               root=rootN:int;
+              if (RCMFlag>0) {
+                  root=0;
+              }
               depth=-1;
               depth[root]=0;
               var Flag=0:int;
               var GivenRatio=ratios:real;
-              if (GivenRatio == DefaultRatio ) {//do default call
+              if (GivenRatio == NoRatio ) {//do default call
+                  GivenRatio=0.015;
                   co_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
                            ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
                   repMsg=return_depth();
@@ -5207,15 +5605,27 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                   depth=-1;
                   depth[root]=0;
                   timer.stop();
+                  timer.clear();
                   timer.start();
                   co_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
                            ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
                   timer.stop();
-                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co D version $$$$$$$$$$$$$$$$$$");
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co D Hybrid version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  Flag=1;
+                  timer.clear();
+                  timer.start();
+                  co_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,2.0);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co D TopDown version $$$$$$$$$$$$$$$$$$");
 
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=1;
                   co_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5225,6 +5635,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=0;
                   co_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5235,6 +5646,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=1;
                   co_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5244,6 +5656,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=0;
                   co_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5254,6 +5667,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=1;
                   co_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5263,6 +5677,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=0;
                   co_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5278,11 +5693,21 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                   fo_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
                            ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
                   timer.stop();
-                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for D version $$$$$$$$$$$$$$$$$$");
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for D Hybrid version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.clear();
+                  timer.start();
+                  fo_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,2.0);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for D TopDown version $$$$$$$$$$$$$$$$$$");
 
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=1;
                   fo_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5292,6 +5717,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=0;
                   fo_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5302,6 +5728,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=1;
                   fo_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5311,6 +5738,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=0;
                   fo_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5321,6 +5749,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=1;
                   fo_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5330,6 +5759,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=0;
                   fo_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5350,26 +5780,42 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                       st);
 
               root=rootN:int;
+              if (RCMFlag>0) {
+                  root=0;
+              }
               depth=-1;
               depth[root]=0;
               var Flag=0:int;
               var GivenRatio=ratios:real;
-              if (GivenRatio == DefaultRatio ) {//do default call
-                  co_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
-                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,Flag,GivenRatio);
+              if (GivenRatio == NoRatio ) {//do default call
+                  GivenRatio=0.015;
+                  co_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
                   repMsg=return_depth();
  
               } else {// do batch test
                   timer.stop();
+                  timer.clear();
                   timer.start();
                   co_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
                            ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
                   timer.stop();
-                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co D version $$$$$$$$$$$$$$$$$$");
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co D Hybrid version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.clear();
+                  timer.start();
+                  Flag=1;
+                  co_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,2.0);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for Co D TopDown version $$$$$$$$$$$$$$$$$$");
 
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=1;
                   co_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5379,6 +5825,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=0;
                   co_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5389,6 +5836,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=1;
                   co_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5398,6 +5846,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=0;
                   co_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5408,6 +5857,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=1;
                   co_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5417,6 +5867,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=0;
                   co_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5431,11 +5882,21 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                   fo_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
                            ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
                   timer.stop();
-                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for D version $$$$$$$$$$$$$$$$$$");
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for D Hybrid version $$$$$$$$$$$$$$$$$$");
+
+                  depth=-1;
+                  depth[root]=0;
+                  timer.clear();
+                  timer.start();
+                  fo_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,2.0);
+                  timer.stop();
+                  writeln("$$$$$$$$$$$$$$$$$ graph BFS takes ",timer.elapsed(), " for D TopDown version $$$$$$$$$$$$$$$$$$");
 
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=1;
                   fo_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5455,6 +5916,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
  
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=1;
                   fo_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5464,6 +5926,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=0;
                   fo_set_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5474,6 +5937,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=1;
                   fo_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
@@ -5483,6 +5947,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
                   depth=-1;
                   depth[root]=0;
+                  timer.clear();
                   timer.start();
                   Flag=0;
                   fo_domain_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
