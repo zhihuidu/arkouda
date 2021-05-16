@@ -1285,6 +1285,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
 
 
+
 // directly read a graph from given file and build the SegGraph class in memory
   //proc segGraphFileMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
   proc segGraphFileMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
@@ -1588,7 +1589,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
           SetCurF.add(x);
           var numCurF=1:int;
-          var GivenRatio=0.001:int;
+          var GivenRatio=0.021:int;
           var topdown=0:int;
           var bottomup=0:int;
           var LF=1:int;
@@ -1636,8 +1637,15 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            }//end coforall
                        }else {// bottom up
                            bottomup+=1;
-                           forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                           var UnVisitedSet= new set(int,parSafe = true);//use set to keep the unvisited vertices
+                           forall i in vertexBegin..vertexEnd with (ref UnVisitedSet) {
                               if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
+                              }
+                           }
+                           //forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                           forall i in UnVisitedSet  with (ref SetNextF) {
+                              //if depth[i]==-1 {
                                   var    numNF=nf[i];
                                   var    edgeId=sf[i];
                                   var nextStart=max(edgeId,edgeBegin);
@@ -1650,7 +1658,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                          }
                                   }
 
-                              }
+                              //}
                            }
                        }
                    }//end on loc
@@ -1850,7 +1858,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
               var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
               SetCurF.add(x);
               var numCurF=1:int;
-              var GivenRatio=0.001:int;
+              var GivenRatio=0.25:int;
               var topdown=0:int;
               var bottomup=0:int;
               var LF=1:int;
@@ -1918,8 +1926,15 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                }//end coforall
                            }else {// bottom up
                                bottomup+=1;
-                               forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                               var UnVisitedSet= new set(int,parSafe = true);//use set to keep the unvisited vertices
+                               forall i in vertexBegin..vertexEnd with (ref UnVisitedSet) {
                                   if depth[i]==-1 {
+                                     UnVisitedSet.add(i);
+                                  }
+                               }
+                               //forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                               forall i in UnVisitedSet  with (ref SetNextF) {
+                                  //if depth[i]==-1 {
                                       var    numNF=nf[i];
                                       var    edgeId=sf[i];
                                       var nextStart=max(edgeId,edgeBegin);
@@ -1932,10 +1947,17 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                              }
                                       }
 
+                                  //}
+                               }
+                               UnVisitedSet.clear();
+                               forall i in vertexBeginR..vertexEndR with (ref UnVisitedSet) {
+                                  if depth[i]==-1 {
+                                     UnVisitedSet.add(i);
                                   }
                                }
-                               forall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
-                                  if depth[i]==-1 {
+                               //forall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
+                               forall i in UnVisitedSet  with (ref SetNextF) {
+                                  //if depth[i]==-1 {
                                       var    numNF=nfR[i];
                                       var    edgeId=sfR[i];
                                       var nextStart=max(edgeId,edgeBegin);
@@ -1947,7 +1969,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                                    SetNextF.add(i);
                                              }
                                       }
-                                  }
+                                  //}
                                }
                            }
                        }//end on loc
@@ -2121,6 +2143,8 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       smLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
       return new MsgTuple(repMsg, MsgType.NORMAL);
   }
+
+
 
 
 // directly read a stream from given file and build the SegGraph class in memory
@@ -2573,10 +2597,15 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       return new MsgTuple(repMsg, MsgType.NORMAL);
   }
 
+
+
+
+
+
   //proc segrmatgenMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
   proc segrmatgenMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       var repMsg: string;
-      var (slgNv, sNe_per_v, sp, sdire,swei,rest )
+      var (slgNv, sNe_per_v, sp, sdire,swei,RCMs )
           = payload.splitMsgToTuple(6);
       //writeln(slgNv, sNe_per_v, sp, sdire,swei,rest);
       var lgNv = slgNv: int;
@@ -2584,12 +2613,14 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       var p = sp: real;
       var directed=sdire : int;
       var weighted=swei : int;
+      var RCMFlag=RCMs : int;
 
       var Nv = 2**lgNv:int;
       // number of edges
       var Ne = Ne_per_v * Nv:int;
 
       var timer:Timer;
+      timer.clear();
       timer.start();
       var n_vertices=Nv;
       var n_edges=Ne;
@@ -2735,10 +2766,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              }
 
              try {
-                 if totalDigits <=  4 { 
-                      iv = mergedArgsort( 4); 
+                 if totalDigits <=  2 { 
+                      iv = mergedArgsort( 2); 
                  }
-                 if (totalDigits >  4) && ( totalDigits <=  8) { 
+                 if (totalDigits >  2) && ( totalDigits <=  8) { 
                       iv =  mergedArgsort( 8); 
                  }
                  if (totalDigits >  8) && ( totalDigits <=  16) { 
@@ -2835,6 +2866,155 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       }
 
 
+      proc RCM() throws {
+            
+          var cmary: [0..Nv-1] int;
+          var indexary:[0..Nv-1] int;
+          var depth:[0..Nv-1] int;
+          depth=-1;
+          proc smallVertex() :int {
+                var tmpmindegree=1000000:int;
+                var minindex=0:int;
+                for i in 0..Nv-1 {
+                   if (neighbour[i]<tmpmindegree) && (neighbour[i]>0) {
+                      tmpmindegree=neighbour[i];
+                      minindex=i;
+                   }
+                }
+                return minindex;
+          }
+
+          var currentindex=0:int;
+          var x=smallVertex();
+          cmary[0]=x;
+          depth[x]=0;
+
+          //var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
+          //var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
+          var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
+          var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
+          SetCurF.add(x);
+          var numCurF=1:int;
+          var GivenRatio=0.25:int;
+          var topdown=0:int;
+          var bottomup=0:int;
+          var LF=1:int;
+          var cur_level=0:int;
+          
+          while (numCurF>0) {
+                //writeln("SetCurF=");
+                //writeln(SetCurF);
+                coforall loc in Locales  with (ref SetNextF,+ reduce topdown, + reduce bottomup) {
+                   on loc {
+                       ref srcf=src;
+                       ref df=dst;
+                       ref nf=neighbour;
+                       ref sf=start_i;
+
+                       var edgeBegin=src.localSubdomain().low;
+                       var edgeEnd=src.localSubdomain().high;
+                       var vertexBegin=src[edgeBegin];
+                       var vertexEnd=src[edgeEnd];
+
+                       proc xlocal(x :int, low:int, high:int):bool{
+                                  if (low<=x && x<=high) {
+                                      return true;
+                                  } else {
+                                      return false;
+                                  }
+                       }
+                       var switchratio=(numCurF:real)/nf.size:real;
+                       if (switchratio<GivenRatio) {//top down
+                           topdown+=1;
+                           forall i in SetCurF with (ref SetNextF) {
+                              if ((xlocal(i,vertexBegin,vertexEnd)) ) {// current edge has the vertex
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF){
+                                         if (depth[j]==-1) {
+                                               depth[j]=cur_level+1;
+                                               SetNextF.add(j);
+                                         }
+                                  }
+                              } 
+                           }//end coforall
+                       }else {// bottom up
+                           bottomup+=1;
+                           var UnVisitedSet= new set(int,parSafe = true);//use set to keep the unvisited vertices
+                           forall i in vertexBegin..vertexEnd with (ref UnVisitedSet) {
+                              if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
+                              }
+                           }
+                           //forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                           forall i in UnVisitedSet  with (ref SetNextF) {
+                              //if depth[i]==-1 {
+                                  var    numNF=nf[i];
+                                  var    edgeId=sf[i];
+                                  var nextStart=max(edgeId,edgeBegin);
+                                  var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                  ref NF=df[nextStart..nextEnd];
+                                  forall j in NF with (ref SetNextF){
+                                         if (SetCurF.contains(j)) {
+                                               depth[i]=cur_level+1;
+                                               SetNextF.add(i);
+                                         }
+                                  }
+
+                              //}
+                           }
+                       }
+                   }//end on loc
+                }//end coforall loc
+                cur_level+=1;
+                //numCurF=SetNextF.getSize();
+                numCurF=SetNextF.size;
+
+                if (numCurF>0) {
+                    var tmpary:[0..numCurF-1] int;
+                    var sortary:[0..numCurF-1] int;
+                    var numary:[0..numCurF-1] int;
+                    var tmpa=0:int;
+                    forall (a,b)  in zip (tmpary,SetNextF.toArray()) {
+                        a=b;
+                    }
+                    forall i in 0..numCurF-1 {
+                         numary[i]=neighbour[tmpary[i]];
+                    }
+
+                    var tmpiv = argsortDefault(numary);
+                    sortary=tmpary[tmpiv];
+                    cmary[currentindex+1..currentindex+numCurF]=sortary;
+                    currentindex=currentindex+numCurF;
+                }
+
+
+                //SetCurF<=>SetNextF;
+                SetCurF=SetNextF;
+                SetNextF.clear();
+          }//end while  
+
+          cmary.reverse();
+          forall i in 0..Nv-1{
+              indexary[cmary[i]]=i;
+          }
+
+          var tmpary:[0..Ne-1] int;
+          forall i in 0..Ne-1 {
+                  tmpary[i]=indexary[src[i]];
+          }
+          src=tmpary;
+          forall i in 0..Ne-1 {
+                  tmpary[i]=indexary[dst[i]];
+          }
+          dst=tmpary;
+
+          return "success";
+      }//end RCM
+
       if (directed!=0) {// for directed graph
           if (weighted!=0) { // for weighted graph
              //var e_weight: [0..Ne-1] int;
@@ -2848,10 +3028,21 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              writeln("$$$$$$$$$$$$$$$$$ RMAT generate the graph takes ",timer.elapsed(), "$$$$$$$$$$$$$$$$$$");
              writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
              writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+             timer.clear();
              timer.start();
              //twostep_sort();
              combine_sort();
              set_neighbour();
+
+
+             if (RCMFlag>0) {
+                    RCM();
+                    neighbour=0;
+                    start_i=-1;
+                    combine_sort();
+                    set_neighbour();
+             }
+
 
              var ewName ,vwName:string;
              fillInt(e_weight,1,1000);
@@ -2879,10 +3070,20 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              writeln("$$$$$$$$$$$$$$$$$ RMAT generate the graph takes ",timer.elapsed(), "$$$$$$$$$$$$$$$$$$");
              writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
              writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+             timer.clear();
              timer.start();
              //twostep_sort();
              combine_sort();
              set_neighbour();
+
+             if (RCMFlag>0) {
+                    RCM();
+                    neighbour=0;
+                    start_i=-1;
+                    combine_sort();
+                    set_neighbour();
+             }
+
              set_common_symtable();
              repMsg =  sNv + '+ ' + sNe + '+ ' + sDirected + '+ ' + sWeighted +
                     '+created ' + st.attrib(srcName)   + '+created ' + st.attrib(dstName) + 
@@ -2896,6 +3097,200 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           var neighbourR=makeDistArray(Nv,int);
           var start_iR=makeDistArray(Nv,int);
           ref  ivR=iv;
+
+
+          proc RCM_u() throws {
+            
+              var cmary: [0..Nv-1] int;
+              var indexary:[0..Nv-1] int;
+              var depth:[0..Nv-1] int;
+              depth=-1;
+              proc smallVertex() :int {
+                    var tmpmindegree=1000000:int;
+                    var minindex=0:int;
+                    for i in 0..Nv-1 {
+                       if (neighbour[i]<tmpmindegree) && (neighbour[i]>0) {
+                          tmpmindegree=neighbour[i];
+                          minindex=i;
+                       }
+                    }
+                    return minindex;
+              }
+
+              var currentindex=0:int;
+              var x=smallVertex();
+              cmary[0]=x;
+              depth[x]=0;
+
+              //var SetCurF=  new DistBag(int,Locales);//use bag to keep the current frontier
+              //var SetNextF=  new DistBag(int,Locales); //use bag to keep the next frontier
+              var SetCurF= new set(int,parSafe = true);//use set to keep the current frontier
+              var SetNextF=new set(int,parSafe = true);//use set to keep the next fromtier
+              SetCurF.add(x);
+              var numCurF=1:int;
+              var GivenRatio=0.25:int;
+              var topdown=0:int;
+              var bottomup=0:int;
+              var LF=1:int;
+              var cur_level=0:int;
+          
+              while (numCurF>0) {
+                    //writeln("SetCurF=");
+                    //writeln(SetCurF);
+                    coforall loc in Locales  with (ref SetNextF,+ reduce topdown, + reduce bottomup) {
+                       on loc {
+                           ref srcf=src;
+                           ref df=dst;
+                           ref nf=neighbour;
+                           ref sf=start_i;
+
+                           ref srcfR=srcR;
+                           ref dfR=dstR;
+                           ref nfR=neighbourR;
+                           ref sfR=start_iR;
+
+                           var edgeBegin=src.localSubdomain().low;
+                           var edgeEnd=src.localSubdomain().high;
+                           var vertexBegin=src[edgeBegin];
+                           var vertexEnd=src[edgeEnd];
+                           var vertexBeginR=srcR[edgeBegin];
+                           var vertexEndR=srcR[edgeEnd];
+
+                           proc xlocal(x :int, low:int, high:int):bool{
+                                      if (low<=x && x<=high) {
+                                          return true;
+                                      } else {
+                                          return false;
+                                      }
+                           }
+                           var switchratio=(numCurF:real)/nf.size:real;
+                           if (switchratio<GivenRatio) {//top down
+                               topdown+=1;
+                               forall i in SetCurF with (ref SetNextF) {
+                                  if ((xlocal(i,vertexBegin,vertexEnd)) ) {// current edge has the vertex
+                                      var    numNF=nf[i];
+                                      var    edgeId=sf[i];
+                                      var nextStart=max(edgeId,edgeBegin);
+                                      var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                      ref NF=df[nextStart..nextEnd];
+                                      forall j in NF with (ref SetNextF){
+                                             if (depth[j]==-1) {
+                                                   depth[j]=cur_level+1;
+                                                   SetNextF.add(j);
+                                             }
+                                      }
+                                  } 
+                                  if ((xlocal(i,vertexBeginR,vertexEndR)) )  {
+                                      var    numNF=nfR[i];
+                                      var    edgeId=sfR[i];
+                                      var nextStart=max(edgeId,edgeBegin);
+                                      var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                      ref NF=dfR[nextStart..nextEnd];
+                                      forall j in NF with (ref SetNextF)  {
+                                             if (depth[j]==-1) {
+                                                   depth[j]=cur_level+1;
+                                                   SetNextF.add(j);
+                                             }
+                                      }
+                                  }
+                               }//end coforall
+                           }else {// bottom up
+                               bottomup+=1;
+                               var UnVisitedSet= new set(int,parSafe = true);//use set to keep the unvisited vertices
+                               forall i in vertexBegin..vertexEnd with (ref UnVisitedSet) {
+                                  if depth[i]==-1 {
+                                     UnVisitedSet.add(i);
+                                  }
+                               }
+                               //forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                               forall i in UnVisitedSet  with (ref SetNextF) {
+                                  //if depth[i]==-1 {
+                                      var    numNF=nf[i];
+                                      var    edgeId=sf[i];
+                                      var nextStart=max(edgeId,edgeBegin);
+                                      var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                      ref NF=df[nextStart..nextEnd];
+                                      forall j in NF with (ref SetNextF){
+                                             if (SetCurF.contains(j)) {
+                                                   depth[i]=cur_level+1;
+                                                   SetNextF.add(i);
+                                             }
+                                      }
+
+                                  //}
+                               }
+                               UnVisitedSet.clear();
+                               forall i in vertexBeginR..vertexEndR with (ref UnVisitedSet) {
+                                  if depth[i]==-1 {
+                                     UnVisitedSet.add(i);
+                                  }
+                               }
+                               //forall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
+                               forall i in UnVisitedSet  with (ref SetNextF) {
+                                  //if depth[i]==-1 {
+                                      var    numNF=nfR[i];
+                                      var    edgeId=sfR[i];
+                                      var nextStart=max(edgeId,edgeBegin);
+                                      var nextEnd=min(edgeEnd,edgeId+numNF-1);
+                                      ref NF=dfR[nextStart..nextEnd];
+                                      forall j in NF with (ref SetNextF)  {
+                                             if (SetCurF.contains(j)) {
+                                                   depth[i]=cur_level+1;
+                                                   SetNextF.add(i);
+                                             }
+                                      }
+                                  //}
+                               }
+                           }
+                       }//end on loc
+                    }//end coforall loc
+                    cur_level+=1;
+                    //numCurF=SetNextF.getSize();
+                    numCurF=SetNextF.size;
+
+                    if (numCurF>0) {
+                        var tmpary:[0..numCurF-1] int;
+                        var sortary:[0..numCurF-1] int;
+                        var numary:[0..numCurF-1] int;
+                        var tmpa=0:int;
+                        forall (a,b)  in zip (tmpary,SetNextF.toArray()) {
+                            a=b;
+                        }
+                        forall i in 0..numCurF-1 {
+                             numary[i]=neighbour[tmpary[i]];
+                        }
+
+                        var tmpiv = argsortDefault(numary);
+                        sortary=tmpary[tmpiv];
+                        cmary[currentindex+1..currentindex+numCurF]=sortary;
+                        currentindex=currentindex+numCurF;
+                    }
+
+
+                    //SetCurF<=>SetNextF;
+                    SetCurF=SetNextF;
+                    SetNextF.clear();
+              }//end while  
+    
+              cmary.reverse();
+              forall i in 0..Nv-1{
+                  indexary[cmary[i]]=i;
+              }
+    
+              var tmpary:[0..Ne-1] int;
+              forall i in 0..Ne-1 {
+                      tmpary[i]=indexary[src[i]];
+              }
+              src=tmpary;
+              forall i in 0..Ne-1 {
+                      tmpary[i]=indexary[dst[i]];
+              }
+              dst=tmpary;
+ 
+              return "success";
+          }//end RCM_u
+
+
 
           coforall loc in Locales  {
               on loc {
@@ -2957,10 +3352,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              } 
 
              try {
-                 if totalDigits <=  4 { 
-                      ivR = mergedArgsort( 4); 
+                 if totalDigits <=  2 { 
+                      ivR = mergedArgsort( 2); 
                  }
-                 if (totalDigits >  4) && ( totalDigits <=  8) { 
+                 if (totalDigits >  2) && ( totalDigits <=  8) { 
                       ivR =  mergedArgsort( 8); 
                  }
                  if (totalDigits >  8) && ( totalDigits <=  16) { 
@@ -3050,10 +3445,13 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              writeln("$$$$$$$$$$$$$$$$$ RMAT graph generating takes ",timer.elapsed(), "$$$$$$$$$$$$$$$$$$");
              writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
              writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+             timer.clear();
              timer.start();
              //twostep_sort();
              combine_sort();
              set_neighbour();
+
+
              coforall loc in Locales  {
                        on loc {
                            forall i in srcR.localSubdomain() {
@@ -3068,6 +3466,24 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              combine_sortR();
              set_neighbourR();
 
+             if (RCMFlag>0) {
+                    RCM_u();
+                    neighbour=0;
+                    start_i=-1;
+                    combine_sort();
+                    set_neighbour();
+                    coforall loc in Locales  {
+                              on loc {
+                                  forall i in srcR.localSubdomain() {
+                                        srcR[i]=dst[i];
+                                        dstR[i]=src[i];
+                                  }       
+                              }
+                    }
+                    combine_sortR();
+                    set_neighbourR();
+
+             }
              //only for weighted  graph
              var ewName ,vwName:string;
              var e_weight = makeDistArray(Ne,int);
@@ -3107,10 +3523,13 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              writeln("$$$$$$$$$$$$$$$$$ RMAT graph generating takes ",timer.elapsed(), "$$$$$$$$$$$$$$$$$$");
              writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
              writeln("$$$$$$$$$$$$  $$$$$$$$$$$$$$$$$$$$$$$");
+             timer.clear();
              timer.start();
              //twostep_sort();
              combine_sort();
              set_neighbour();
+
+
              coforall loc in Locales  {
                        on loc {
                            forall i in srcR.localSubdomain() {
@@ -3124,6 +3543,25 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
              //twostep_sortR(); 
              combine_sortR();
              set_neighbourR();
+             if (RCMFlag>0) {
+                    RCM_u();
+                    neighbour=0;
+                    start_i=-1;
+                    combine_sort();
+                    set_neighbour();
+                    coforall loc in Locales  {
+                              on loc {
+                                  forall i in srcR.localSubdomain() {
+                                        srcR[i]=dst[i];
+                                        dstR[i]=src[i];
+                                  }       
+                              }
+                    }
+                    combine_sortR();
+                    set_neighbourR();
+
+             }
+
              set_common_symtable();
              set_common_symtableR();
              repMsg =  sNv + '+ ' + sNe + '+ ' + sDirected + ' +' + sWeighted +
@@ -3147,10 +3585,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
 
 
 
+
   //proc segBFSMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
   proc segBFSMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       var repMsg: string;
-      var NoRatio=-1:int;
       //var (n_verticesN,n_edgesN,directedN,weightedN,srcN, dstN, startN, neighbourN,vweightN,eweightN, rootN )
       //    = payload.decode().splitMsgToTuple(10);
       var (RCMs,n_verticesN,n_edgesN,directedN,weightedN,restpart )
@@ -3999,7 +4437,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
           }
           writeln("Local Ratio=", (TotalLocal):real/(TotalLocal+TotalRemote):real,"Total Local Access=",TotalLocal," , Total Remote Access=",TotalRemote);
           return "success";
-      }//end of_d1_bfs_kernel_u
+      }//end of _d1_bfs_kernel_u
 
       proc fo_bag_bfs_kernel_u(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
                         neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int, 
@@ -4079,8 +4517,15 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            }//end coforall
                        }else {// bottom up
                            bottomup+=1;
-                           forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                           var UnVisitedSet= new set(int,parSafe = true);//use set to keep the unvisited vertices
+                           forall i in vertexBegin..vertexEnd with (ref UnVisitedSet) {
                               if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
+                              }
+                           }
+                           //forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                           forall i in UnVisitedSet  with (ref SetNextF) {
+                              //if depth[i]==-1 {
                                   var    numNF=nf[i];
                                   var    edgeId=sf[i];
                                   var nextStart=max(edgeId,edgeBegin);
@@ -4093,10 +4538,17 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                          }
                                   }
 
+                              //}
+                           }
+                           UnVisitedSet.clear();
+                           forall i in vertexBeginR..vertexEndR with (ref UnVisitedSet) {
+                              if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
                               }
                            }
-                           forall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
-                              if depth[i]==-1 {
+                           //forall i in vertexBeginR..vertexEndR  with (ref SetNextF) {
+                           forall i in UnVisitedSet  with (ref SetNextF) {
+                              //if depth[i]==-1 {
                                   var    numNF=nfR[i];
                                   var    edgeId=sfR[i];
                                   var nextStart=max(edgeId,edgeBegin);
@@ -4108,7 +4560,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                                SetNextF.add(i);
                                          }
                                   }
-                              }
+                              //}
                            }
                        }
                    }//end on loc
@@ -4214,8 +4666,15 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            }//end coforall
                        }else {//bottom up
                            bottomup+=1;
-                           forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                           var UnVisitedSet= new set(int,parSafe = true);//use set to keep the unvisited vertices
+                           forall i in vertexBegin..vertexEnd with (ref UnVisitedSet) {
                               if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
+                              }
+                           }
+                           //forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                           forall i in UnVisitedSet  with (ref SetNextF) {
+                              //if depth[i]==-1 {
                                   var    numNF=nf[i];
                                   var    edgeId=sf[i];
                                   var nextStart=max(edgeId,edgeBegin);
@@ -4228,10 +4687,17 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                          }
                                   }
 
+                              //}
+                           }
+                           UnVisitedSet.clear();
+                           forall i in vertexBeginR..vertexEndR with (ref UnVisitedSet) {
+                              if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
                               }
                            }
-                           forall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
-                              if depth[i]==-1 {
+                           //forall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
+                           forall i in UnVisitedSet  with (ref SetNextF) {
+                              //if depth[i]==-1 {
                                   var    numNF=nfR[i];
                                   var    edgeId=sfR[i];
                                   var nextStart=max(edgeId,edgeBegin);
@@ -4243,7 +4709,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                                SetNextF.add(i);
                                          }
                                   }
-                              }
+                              //}
                            }
                        }
                    }//end on loc
@@ -4349,8 +4815,15 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            }//end coforall
                        } else {//bottom up
                            bottomup+=1;
-                           forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                           var UnVisitedSet= new set(int,parSafe = true);//use set to keep the unvisited vertices
+                           forall i in vertexBegin..vertexEnd with (ref UnVisitedSet) {
                               if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
+                              }
+                           }
+                           //forall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                           forall i in UnVisitedSet  with (ref SetNextF) {
+                              //if depth[i]==-1 {
                                   var    numNF=nf[i];
                                   var    edgeId=sf[i];
                                   var nextStart=max(edgeId,edgeBegin);
@@ -4363,10 +4836,17 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                          }
                                   }
 
+                              //}
+                           }
+                           UnVisitedSet.clear();
+                           forall i in vertexBeginR..vertexEndR with (ref UnVisitedSet) {
+                              if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
                               }
                            }
-                           forall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
-                              if depth[i]==-1 {
+                           //forall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
+                           forall i in UnVisitedSet  with (ref SetNextF) {
+                              //if depth[i]==-1 {
                                   var    numNF=nfR[i];
                                   var    edgeId=sfR[i];
                                   var nextStart=max(edgeId,edgeBegin);
@@ -4378,7 +4858,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                                SetNextF.add(i);
                                          }
                                   }
-                              }
+                              //}
                            }
 
                        }
@@ -4624,6 +5104,12 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                    }// end of top down
                    else {  //bottom up
                        bottomup+=1;
+                       var UnVisitedSet= new set(int,parSafe = true);//use set to keep the unvisited vertices
+                       forall i in BoundBeginG[here.id]..BoundEndG[here.id] with (ref UnVisitedSet) {
+                              if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
+                              }
+                       }
                        proc FrontierHas(x:int):bool{
                             var returnval=false;
                             coforall i in 0..numLocales-1 with (ref returnval) {
@@ -4640,9 +5126,10 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                             return returnval;
                        }
 
-                       forall i in BoundBeginG[here.id]..BoundEndG[here.id]
-                                                   with (ref LocalSet, ref RemoteSet)  {
-                          if (depth[i]==-1) {
+                       //forall i in BoundBeginG[here.id]..BoundEndG[here.id]
+                       //                            with (ref LocalSet, ref RemoteSet)  {
+                       forall i in UnVisitedSet  with (ref LocalSet, ref RemoteSet)  {
+                          //if (depth[i]==-1) {
                               if xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) {
                                   var    numNF=nf[i];
                                   var    edgeId=sf[i];
@@ -4705,7 +5192,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                        }
                                   }
                               }//end if
-                          } //end if (depth[i]==-1)
+                          //} //end if (depth[i]==-1)
                        }//end coforall
                    }
 
@@ -4846,8 +5333,16 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            }//end coforall
                        }else {// bottom up
                            bottomup+=1;
-                           coforall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                           var UnVisitedSet= new set(int,parSafe = true);//use set to keep the unvisited vertices
+                           forall i in vertexBegin..vertexEnd  with (ref UnVisitedSet) {
                               if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
+                              }
+                           }
+
+                           coforall i in UnVisitedSet with (ref SetNextF) {
+                           //coforall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                              //if depth[i]==-1 {
                                   var    numNF=nf[i];
                                   var    edgeId=sf[i];
                                   var nextStart=max(edgeId,edgeBegin);
@@ -4860,10 +5355,17 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                          }
                                   }
 
+                              //}
+                           }
+                           UnVisitedSet.clear();
+                           forall i in vertexBeginR..vertexEndR  with (ref UnVisitedSet) {
+                              if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
                               }
                            }
-                           coforall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
-                              if depth[i]==-1 {
+                           //coforall i in vertexBeginR..vertexEndR  with (ref SetNextF) {
+                           coforall i in UnVisitedSet  with (ref SetNextF) {
+                              //if depth[i]==-1 {
                                   var    numNF=nfR[i];
                                   var    edgeId=sfR[i];
                                   var nextStart=max(edgeId,edgeBegin);
@@ -4876,7 +5378,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                          }
                                   }
                               }
-                           }
+                           //}
                        }
                    }//end on loc
                 }//end coforall loc
@@ -4982,8 +5484,15 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            }//end coforall
                        }else {//bottom up
                            bottomup+=1;
-                           coforall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                           var UnVisitedSet= new set(int,parSafe = true);//use set to keep the unvisited vertices
+                           forall i in vertexBegin..vertexEnd  with (ref UnVisitedSet) {
                               if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
+                              }
+                           }
+                           //coforall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                           coforall i in UnVisitedSet  with (ref SetNextF) {
+                              //if depth[i]==-1 {
                                   var    numNF=nf[i];
                                   var    edgeId=sf[i];
                                   var nextStart=max(edgeId,edgeBegin);
@@ -4996,10 +5505,17 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                          }
                                   }
 
+                              //}
+                           }
+                           UnVisitedSet.clear();
+                           forall i in vertexBeginR..vertexEndR  with (ref UnVisitedSet) {
+                              if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
                               }
                            }
-                           coforall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
-                              if depth[i]==-1 {
+                           //coforall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
+                           coforall i in UnVisitedSet  with (ref SetNextF) {
+                              //if depth[i]==-1 {
                                   var    numNF=nfR[i];
                                   var    edgeId=sfR[i];
                                   var nextStart=max(edgeId,edgeBegin);
@@ -5011,7 +5527,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                                SetNextF.add(i);
                                          }
                                   }
-                              }
+                              //}
                            }
                        }
                    }//end on loc
@@ -5117,8 +5633,15 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                            }//end coforall
                        } else {//bottom up
                            bottomup+=1;
-                           coforall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                           var UnVisitedSet= new set(int,parSafe = true);//use set to keep the unvisited vertices
+                           forall i in vertexBegin..vertexEnd  with (ref UnVisitedSet) {
                               if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
+                              }
+                           }
+                           //coforall i in vertexBegin..vertexEnd  with (ref SetNextF) {
+                           coforall i in UnVisitedSet with (ref SetNextF) {
+                              //if depth[i]==-1 {
                                   var    numNF=nf[i];
                                   var    edgeId=sf[i];
                                   var nextStart=max(edgeId,edgeBegin);
@@ -5131,10 +5654,17 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                          }
                                   }
 
+                              //}
+                           }
+                           UnVisitedSet.clear();
+                           forall i in vertexBeginR..vertexEndR  with (ref UnVisitedSet) {
+                              if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
                               }
                            }
-                           coforall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
-                              if depth[i]==-1 {
+                           //coforall i in vertexBeginR..vertexEnd  with (ref SetNextF) {
+                           coforall i in UnVisitedSet  with (ref SetNextF) {
+                              //if depth[i]==-1 {
                                   var    numNF=nfR[i];
                                   var    edgeId=sfR[i];
                                   var nextStart=max(edgeId,edgeBegin);
@@ -5146,7 +5676,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                                SetNextF.add(i);
                                          }
                                   }
-                              }
+                              //}
                            }
 
                        }
@@ -5410,9 +5940,16 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                             return returnval;
                        }
 
-                       coforall i in BoundBeginG[here.id]..BoundEndG[here.id]
-                                                   with (ref LocalSet, ref RemoteSet)  {
-                          if (depth[i]==-1) {
+                       var UnVisitedSet= new set(int,parSafe = true);//use set to keep the unvisited vertices
+                       forall i in BoundBeginG[here.id]..BoundEndG[here.id]  with (ref UnVisitedSet) {
+                              if depth[i]==-1 {
+                                 UnVisitedSet.add(i);
+                              }
+                       }
+                       //coforall i in BoundBeginG[here.id]..BoundEndG[here.id]
+                       //                            with (ref LocalSet, ref RemoteSet)  {
+                       coforall i in UnVisitedSet with (ref LocalSet, ref RemoteSet)  {
+                          //if (depth[i]==-1) {
                               if xlocal(i,vertexBeginG[here.id],vertexEndG[here.id]) {
                                   var    numNF=nf[i];
                                   var    edgeId=sf[i];
@@ -5475,7 +6012,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
                                        }
                                   }
                               }//end if
-                          } //end if (depth[i]==-1)
+                          //} //end if (depth[i]==-1)
                        }//end coforall
                    }
 
@@ -5595,10 +6132,12 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
               depth[root]=0;
               var Flag=0:int;
               var GivenRatio=ratios:real;
-              if (GivenRatio == NoRatio ) {//do default call
-                  GivenRatio=0.015;
-                  co_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
-                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
+              if (GivenRatio <0  ) {//do default call
+                  GivenRatio=-1.0* GivenRatio;
+                  //co_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                  //         ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
+                  fo_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,1,GivenRatio);
                   repMsg=return_depth();
  
               } else {// do batch test
@@ -5787,10 +6326,12 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
               depth[root]=0;
               var Flag=0:int;
               var GivenRatio=ratios:real;
-              if (GivenRatio == NoRatio ) {//do default call
-                  GivenRatio=0.015;
-                  co_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
-                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
+              if (GivenRatio <0 ) {//do default call
+                  GivenRatio=-1.0*GivenRatio;
+                  //co_d1_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                  //         ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,GivenRatio);
+                  fo_bag_bfs_kernel_u(ag.neighbour.a, ag.start_i.a,ag.src.a,ag.dst.a,
+                           ag.neighbourR.a, ag.start_iR.a,ag.srcR.a,ag.dstR.a,1,GivenRatio);
                   repMsg=return_depth();
  
               } else {// do batch test
@@ -5968,6 +6509,7 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       return new MsgTuple(repMsg, MsgType.NORMAL);
 
   }
+
 
 
   proc segTriMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
