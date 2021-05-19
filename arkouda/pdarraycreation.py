@@ -1117,14 +1117,14 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
         cmd="segmentedGraphBFS"
         #if (cast(int,graph.directed)!=0)  :
         #DefaultRatio=0.75111
-        DefaultRatio=0.01
-        RCMFlage=0
+        DefaultRatio=-0.6
+        RCMFlag=0
         if (int(graph.directed)>0)  :
             if (int(graph.weighted)==0):
               # directed unweighted GraphD
               #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {}".format(
               args = "{} {} {} {} {} {} {} {} {} {} {}".format(
-                 RCMFlage,\
+                 RCMFlag,\
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
@@ -1134,7 +1134,7 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
               # directed weighted GraphDW
               #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {}".format(
               args = "{} {} {} {} {} {} {} {} {} {} {} {} {}".format(
-                 RCMFlage,\
+                 RCMFlag,\
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
@@ -1146,7 +1146,7 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
               # undirected unweighted GraphUD
               #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
               args = "{} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
-                 RCMFlage,\
+                 RCMFlag,\
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
@@ -1158,7 +1158,7 @@ def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pda
               # undirected weighted GraphUDW 15
               #msg = "segmentedGraphBFS {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
               args = "{} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
-                 RCMFlage,\
+                 RCMFlag,\
                  graph.n_vertices,graph.n_edges,\
                  graph.directed,graph.weighted,\
                  graph.src.name,graph.dst.name,\
