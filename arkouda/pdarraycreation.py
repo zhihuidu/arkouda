@@ -1094,7 +1094,7 @@ def rmat_gen (lgNv:int, Ne_per_v:int, p:float, directed: int,weighted:int) ->\
            else:
                return GraphUD(*(cast(str,repMsg).split('+')))
 
-# @typechecked
+@typechecked
 def graph_bc(graph: Union[GraphD,GraphDW,GraphUD,GraphUDW]) -> pdarray:
     """
     This function generates the betweeness centrality values for every vertex 
