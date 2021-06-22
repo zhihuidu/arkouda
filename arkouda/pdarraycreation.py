@@ -1099,7 +1099,7 @@ def graph_bc(graph: Union[GraphD,GraphDW,GraphUD,GraphUDW]) -> pdarray:
     """
     This function generates the betweeness centrality values for every vertex 
     in a given graph.
-    Parameters
+    Parameters 
     ----------
         Graph data structure. 
 
@@ -1118,7 +1118,7 @@ def graph_bc(graph: Union[GraphD,GraphDW,GraphUD,GraphUDW]) -> pdarray:
     ------
     Runtime error
     """
-    cmd="segmentedGraphBC"
+    cmd="segmentedGraphBC"  
     if (int(graph.directed)>0):
         if (int(graph.weighted)==0):
             # directed unweighted GraphD
