@@ -15,7 +15,7 @@ __all__ = ["array", "zeros", "ones", "zeros_like", "ones_like",
            "arange", "linspace", "randint", "uniform", "standard_normal",
            "random_strings_uniform", "random_strings_lognormal", 
            "from_series", "suffix_array","lcp_array","suffix_array_file",
-           "rmat_gen","graph_bfs","graph_file_read","graph_triangle",
+           "rmat_gen","graph_bc","graph_bfs","graph_file_read","graph_triangle",
            "stream_file_read","stream_tri_cnt","streamPL_tri_cnt",
            "streamHead_tri_cnt","streamMid_tri_cnt","streamTail_tri_cnt"]
 
@@ -1094,6 +1094,80 @@ def rmat_gen (lgNv:int, Ne_per_v:int, p:float, directed: int,weighted:int) ->\
            else:
                return GraphUD(*(cast(str,repMsg).split('+')))
 
+# @typechecked
+def graph_bc(graph: Union[GraphD,GraphDW,GraphUD,GraphUDW]) -> pdarray:
+    """
+    This function generates the betweeness centrality values for every vertex 
+    in a given graph.
+    Parameters
+    ----------
+        Graph data structure. 
+
+    Returns
+    -------
+    pdarray
+        The betweeness centrality value for each vertex. 
+
+    See Also
+    --------
+
+    Notes
+    -----
+
+    Raises
+    ------
+    Runtime error
+    """
+    cmd="segmentedGraphBC"
+    if (int(graph.directed)>0):
+        if (int(graph.weighted)==0):
+            # directed unweighted GraphD
+            args = "{} {} {} {} {} {} {} {}".format(
+                graph.n_vertices,graph.n_edges,\
+                graph.directed,graph.weighted,\
+                graph.src.name,graph.dst.name,\
+                graph.start_i.name,graph.neighbour.name)
+        else:
+            # directed weighted GraphDW
+            args = "{} {} {} {} {} {} {} {} {} {}".format(
+                graph.n_vertices,graph.n_edges,\
+                graph.directed,graph.weighted,\
+                graph.src.name,graph.dst.name,\
+                graph.start_i.name,graph.neighbour.name,\
+                graph.v_weight.name,graph.e_weight.name)
+    else:
+        if (int(graph.weighted)==0):
+            # undirected unweighted GraphUD
+            args = "{} {} {} {} {} {} {} {} {} {} {} {}".format(
+                graph.n_vertices,graph.n_edges,\
+                graph.directed,graph.weighted,\
+                graph.src.name,graph.dst.name,\
+                graph.start_i.name,graph.neighbour.name,\
+                graph.srcR.name,graph.dstR.name,\
+                graph.start_iR.name,graph.neighbourR.name)
+        else:
+            # undirected weighted GraphUDW 
+            args = "{} {} {} {} {} {} {} {} {} {} {} {} {} {}".format(
+                graph.n_vertices,graph.n_edges,\
+                graph.directed,graph.weighted,\
+                graph.src.name,graph.dst.name,\
+                graph.start_i.name,graph.neighbour.name,\
+                graph.srcR.name,graph.dstR.name,\
+                graph.start_iR.name,graph.neighbourR.name,\
+                graph.v_weight.name,graph.e_weight.name)
+
+        #repMsg = generic_msg(msg)
+        repMsg = generic_msg(cmd=cmd,args=args)
+        '''
+        tmpmsg=cast(str,repMsg).split('+')
+        levelstr=tmpmsg[0:1]
+        vertexstr=tmpmsg[1:2]
+        levelary=create_pdarray(*(cast(str,levelstr)) )
+        
+        vertexary=create_pdarray(*(cast(str,vertexstr)) )
+        '''
+        return create_pdarray(repMsg)
+
 @typechecked
 def graph_bfs (graph: Union[GraphD,GraphDW,GraphUD,GraphUDW], root: int ) -> pdarray:
         """
@@ -1330,10 +1404,6 @@ def streamPL_tri_cnt(Ne:int, Nv:int,Ncol:int,directed:int, filename: str,\
         #repMsg = generic_msg(msg)
         repMsg = generic_msg(cmd=cmd,args=args)
         return create_pdarray(repMsg)
-
-
-
-
 
 '''
 @typechecked
