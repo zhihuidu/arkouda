@@ -22,6 +22,7 @@ module SegmentedMsg {
   use Time;
   use CommAggregation;
   use Sort;
+  use Atomics;
 
   private config const DEBUG = false;
   const smLogger = new Logger();
@@ -3333,8 +3334,63 @@ proc segmentedPeelMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTup
       return new MsgTuple(repMsg, MsgType.NORMAL);
   }
 
+  proc segBCMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+      var (n_verticesN, n_edgesN, directedN, weightedN, restpart)
+          = payload.splitMsgToTuple(5); 
 
+      //writeln(payload.splitMsgToTuple(5));
+      var Nv = n_verticesN:int; 
+      var Ne = n_edgesN:int; 
+      var Directed = directedN:int; 
+      var Weighted = weightedN:int; 
+      var BCName:string; 
+      var srcN, dstN, startN, neighbourN, vweightN, eweightN, rootN:string;
+      var srcRN, dstRN, startRN, neighbourRN:string;
+      var BC = makeDistArray(Nv, int); 
 
+      proc bc_kernel_und_unw(nei:[?D1] int, start_i:[?D2] int,src:[?D3] int, dst:[?D4] int,
+                            neiR:[?D11] int, start_iR:[?D12] int,srcR:[?D13] int, dstR:[?D14] int):string throws {
+        
+          // Make the distributed arrays used for 
+          var sp_count = makeDistArray(Nv, int);
+          var dist = makeDistArray(Nv, int);
+          var P = makeDistArray(Nv, DistBag(int)); 
+          writeln(P); 
+
+          forall s in D1 {
+            forall t in D1 {
+              sp_count[t] = 0; 
+              dist[t] = -1; 
+            }
+          }
+          return "okay";
+        } 
+    
+      (srcN, dstN, startN, neighbourN, srcRN, dstRN, startRN, neighbourRN) =
+                   restpart.splitMsgToTuple(8);
+
+      //writeln(restpart.splitMsgToTuple(10)); 
+
+      var ag = new owned SegGraphUD(Nv, Ne, Directed, Weighted,
+            srcN, dstN, startN, neighbourN,
+            srcRN, dstRN, startRN, neighbourRN, st);
+    
+      var temp = bc_kernel_und_unw(ag.neighbour.a, ag.start_i.a, ag.src.a, ag.dst.a, 
+                    ag.neighbourR.a, ag.start_iR.a, ag.srcR.a, ag.dstR.a);
+      
+      // The message that is sent back to the Python front-end. 
+      proc return_BC(): string throws {
+          BCName = st.nextName();
+          var BCEntry = new shared SymEntry(BC);
+          st.addEntry(BCName, BCEntry);
+
+          var BCMsg =  'created ' + st.attrib(BCName);
+          return BCMsg;
+        }
+
+      var repMsg = return_BC();
+      return new MsgTuple(repMsg, MsgType.NORMAL);
+  }
 
   //proc segBFSMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
   proc segBFSMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
