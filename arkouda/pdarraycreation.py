@@ -10,6 +10,7 @@ from arkouda.dtypes import structDtypeCodes, NUMBER_FORMAT_STRINGS, float64, int
 from arkouda.dtypes import dtype as akdtype
 from arkouda.pdarrayclass import pdarray, create_pdarray
 from arkouda.strings import Strings
+from arkouda.suffixarrays import SArrays
 
 __all__ = ["array", "zeros", "ones", "zeros_like", "ones_like", 
            "arange", "linspace", "randint", "uniform", "standard_normal",
